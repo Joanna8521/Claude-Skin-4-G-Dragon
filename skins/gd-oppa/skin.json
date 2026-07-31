@@ -1,0 +1,12 @@
+{
+  "name": "gd-oppa",
+  "title": "GD 歐巴",
+  "description": "開場有權志龍替你打氣，依時段換句子",
+  "author": "Joanna",
+  "version": "1.0.0",
+  "persona": "persona.md",
+  "banner": "banner.sh",
+  "greetings": "greetings.txt",
+  "accent256": 204,
+  "dim256": 138
+}

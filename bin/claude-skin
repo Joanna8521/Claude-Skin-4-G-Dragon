@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+"""claude-skin: Claude Code 的 skin 管理器。
+
+用法：
+  claude-skin list              列出可用 skin
+  claude-skin current           顯示目前套用的 skin
+  claude-skin preview <name>    直接跑一次開場畫面（不改任何設定）
+  claude-skin apply <name>      套用 skin（只換開場畫面，不動語氣）
+  claude-skin apply <name> --with-persona
+                                連 Claude 的講話語氣一起換（可選）
+  claude-skin restore           還原成套用前的設定
+
+會動到的檔案：
+  ~/.claude/settings.json                加 hooks.SessionStart（--with-persona 才動 outputStyle）
+  ~/.claude/output-styles/<name>.md      只有 --with-persona 才會裝
+  ~/.claude/claude-skin-state.json       記錄套用前的原狀，供 restore 使用
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+SKINS_DIR = REPO / "skins"
+CLAUDE_DIR = Path.home() / ".claude"
+SETTINGS = CLAUDE_DIR / "settings.json"
+STYLES_DIR = CLAUDE_DIR / "output-styles"
+STATE = CLAUDE_DIR / "claude-skin-state.json"
+
+# 我們插入的 hook 一律指向這個 repo 的 skins/，restore 時據此辨識
+HOOK_MARKER = str(SKINS_DIR)
+
+
+def die(msg: str) -> None:
+    print(f"錯誤：{msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def read_json(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        die(f"{path} 不是合法 JSON（{e}），先手動修好再跑一次")
+
+
+def write_json(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def load_skin(name: str) -> dict:
+    d = SKINS_DIR / name
+    meta_path = d / "skin.json"
+    if not meta_path.exists():
+        die(f"找不到 skin「{name}」，用 claude-skin list 看有哪些")
+    meta = read_json(meta_path, None)
+    meta["_dir"] = d
+    return meta
+
+
+def all_skins() -> list:
+    if not SKINS_DIR.is_dir():
+        return []
+    return sorted(p.name for p in SKINS_DIR.iterdir() if (p / "skin.json").exists())
+
+
+def persona_style_name(meta: dict) -> str:
+    """從 persona.md frontmatter 取 name，這是 outputStyle 要填的值。"""
+    p = meta["_dir"] / meta.get("persona", "persona.md")
+    if not p.exists():
+        die(f"skin 缺少人格檔 {p}")
+    lines = p.read_text(encoding="utf-8").splitlines()
+    if lines and lines[0].strip() == "---":
+        for line in lines[1:]:
+            if line.strip() == "---":
+                break
+            if line.startswith("name:"):
+                return line.split(":", 1)[1].strip()
+    return meta["name"]
+
+
+# ---------------------------------------------------------------- commands
+
+def cmd_list() -> None:
+    skins = all_skins()
+    if not skins:
+        print("目前沒有任何 skin")
+        return
+    state = read_json(STATE, {})
+    active = state.get("skin")
+    print("可用的 skin：\n")
+    for name in skins:
+        meta = load_skin(name)
+        mark = "●" if name == active else "○"
+        print(f"  {mark} {name:<12} {meta.get('title', '')}")
+        print(f"      {meta.get('description', '')}")
+    print()
+    print("● = 已套用。套用：claude-skin apply <name>")
+
+
+def cmd_current() -> None:
+    state = read_json(STATE, {})
+    if not state.get("skin"):
+        print("目前沒有套用任何 skin（原生外觀）")
+        return
+    print(f"目前套用：{state['skin']}")
+    print(f"套用時間：{state.get('applied_at', '未知')}")
+
+
+def cmd_preview(name: str) -> None:
+    meta = load_skin(name)
+    banner = meta["_dir"] / meta.get("banner", "banner.sh")
+    if not banner.exists():
+        die(f"skin 缺少開場檔 {banner}")
+    env = dict(os.environ, CLAUDE_SKIN_COLOR=os.environ.get("CLAUDE_SKIN_COLOR", "1"))
+    r = subprocess.run(["bash", str(banner)], env=env)
+    sys.exit(r.returncode)
+
+
+def cmd_apply(name: str, with_persona: bool = False) -> None:
+    meta = load_skin(name)
+    banner = meta["_dir"] / meta.get("banner", "banner.sh")
+    if not banner.exists():
+        die(f"skin 缺少開場檔 {banner}")
+
+    settings = read_json(SETTINGS, {})
+
+    # 只在第一次套用時記原狀，避免 skin 換來換去把備份洗掉
+    state = read_json(STATE, {})
+    if not state.get("skin"):
+        backup = SETTINGS.with_name(f"settings.json.pre-skin-{datetime.now():%Y%m%d-%H%M%S}")
+        if SETTINGS.exists():
+            shutil.copy2(SETTINGS, backup)
+        state["backup"] = str(backup) if SETTINGS.exists() else None
+        state["prev_output_style"] = settings.get("outputStyle")
+
+    # 人格層是可選的：預設只換開場畫面，不碰 Claude 的講話方式
+    installed_style = None
+    style_name = None
+    if with_persona:
+        persona = meta["_dir"] / meta.get("persona", "persona.md")
+        if not persona.exists():
+            die(f"skin 沒有附人格檔（{persona}），拿掉 --with-persona 再跑一次")
+        style_name = persona_style_name(meta)
+        STYLES_DIR.mkdir(parents=True, exist_ok=True)
+        installed_style = STYLES_DIR / f"{meta['name']}.md"
+        shutil.copy2(persona, installed_style)
+        settings["outputStyle"] = style_name
+
+    # SessionStart hook：先清掉本工具裝過的，再插新的
+    hooks = settings.setdefault("hooks", {})
+    sessions = [
+        group for group in hooks.get("SessionStart", [])
+        if not _is_ours(group)
+    ]
+    # 文件對 SessionStart 只列離散 matcher 值，沒說吃不吃 regex，
+    # 所以拆成兩條而不是寫 "startup|clear"，確保兩種情況都觸發。
+    hook_entry = {
+        "type": "command",
+        "command": f'bash "{banner}"',
+        "statusMessage": f"{meta.get('title', name)} 上線中...",
+    }
+    for matcher in ("startup", "clear"):
+        sessions.append({"matcher": matcher, "hooks": [dict(hook_entry)]})
+    hooks["SessionStart"] = sessions
+
+    write_json(SETTINGS, settings)
+
+    state.update({
+        "skin": meta["name"],
+        "style_name": style_name,
+        "installed_style": str(installed_style) if installed_style else None,
+        "applied_at": datetime.now().isoformat(timespec="seconds"),
+    })
+    write_json(STATE, state)
+
+    print(f"✓ 已套用 {meta.get('title', name)}")
+    print(f"  SessionStart hook → {banner}")
+    if style_name:
+        print(f"  outputStyle → {style_name}")
+    else:
+        print("  語氣未改動（要一起換人格加 --with-persona）")
+    print()
+    print("開新 session 或 /clear 之後生效。")
+
+
+def _is_ours(group: dict) -> bool:
+    for h in group.get("hooks", []):
+        if HOOK_MARKER in str(h.get("command", "")):
+            return True
+    return False
+
+
+def cmd_restore() -> None:
+    state = read_json(STATE, {})
+    if not state.get("skin"):
+        print("目前沒有套用 skin，不用還原")
+        return
+
+    settings = read_json(SETTINGS, {})
+
+    # 移掉我們插的 hook
+    hooks = settings.get("hooks", {})
+    if "SessionStart" in hooks:
+        kept = [g for g in hooks["SessionStart"] if not _is_ours(g)]
+        if kept:
+            hooks["SessionStart"] = kept
+        else:
+            hooks.pop("SessionStart")
+    if not hooks:
+        settings.pop("hooks", None)
+
+    # 只有當初真的改過 outputStyle 才還原，沒改過就別碰
+    if state.get("style_name"):
+        prev = state.get("prev_output_style")
+        if prev:
+            settings["outputStyle"] = prev
+        else:
+            settings.pop("outputStyle", None)
+
+    write_json(SETTINGS, settings)
+
+    # 移掉裝進去的人格檔
+    installed = state.get("installed_style")
+    if installed and Path(installed).exists():
+        Path(installed).unlink()
+
+    skin = state["skin"]
+    write_json(STATE, {})
+    print(f"✓ 已還原（移除 {skin}）")
+    if state.get("backup"):
+        print(f"  套用前的 settings.json 備份仍在：{state['backup']}")
+    print()
+    print("開新 session 或 /clear 之後生效。")
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        return
+    cmd, rest = args[0], args[1:]
+    if cmd == "list":
+        cmd_list()
+    elif cmd == "current":
+        cmd_current()
+    elif cmd == "preview":
+        if not rest:
+            die("preview 要給 skin 名稱")
+        cmd_preview(rest[0])
+    elif cmd == "apply":
+        with_persona = "--with-persona" in rest
+        names = [a for a in rest if not a.startswith("-")]
+        if not names:
+            die("apply 要給 skin 名稱")
+        cmd_apply(names[0], with_persona)
+    elif cmd == "restore":
+        cmd_restore()
+    else:
+        die(f"不認得的指令「{cmd}」，跑 claude-skin help 看用法")
+
+
+if __name__ == "__main__":
+    main()
