@@ -188,6 +188,12 @@ The docs describe `systemMessage` as a "warning message shown to the user." Test
 
 **So the only channel that reliably renders for the user is Claude's own reply.** That's why this hook prints nothing and asks Claude to do the printing instead. It turned out better anyway — a reply can show a real image, not terminal color blocks.
 
+### 2b. Markdown images only resolve relative to the working directory
+
+`![](/absolute/path.jpg)` renders as a blue autolink, not an image. Same for `file://` URLs and for absolute paths wrapped in `<>` to escape spaces. Only a path relative to the session's working directory renders.
+
+That's why `claude-skin photo` keeps a second copy at `~/.claude/claude-skin/<skin>.jpg` and the hook computes the relative path from the session `cwd` at runtime. Every such path is made of `..` segments plus space-free names, so it never needs escaping no matter where your project lives.
+
 ### 3. Full-window backgrounds are blocked by design
 
 [Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) attaches to the Codex desktop app over local CDP and injects CSS to replace the whole window with an image. That is not possible on Claude.
@@ -226,6 +232,7 @@ The greeting appears at the **top of the conversation**, not on the app's home s
 ~/.claude/settings.json.pre-skin-<stamp>    full backup before first apply
 ~/.claude/output-styles/<skin>.md           only with --with-persona
 ~/.claude/claude-skin-state.json            records prior state for restore
+~/.claude/claude-skin/<skin>.jpg            render copy of your photo (space-free path)
 ```
 
 `restore` removes only what this tool added. Your own settings are left alone and the backup is kept.

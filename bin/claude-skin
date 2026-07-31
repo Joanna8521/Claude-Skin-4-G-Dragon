@@ -38,6 +38,7 @@ SETTINGS = CLAUDE_DIR / "settings.json"
 STYLES_DIR = CLAUDE_DIR / "output-styles"
 STATE = CLAUDE_DIR / "claude-skin-state.json"
 HOOK = REPO / "bin" / "greet-hook"
+RENDER_DIR = CLAUDE_DIR / "claude-skin"      # 渲染用的照片副本，路徑無空白
 
 # 我們插入的 hook 一律指向這個 repo 的 skins/，restore 時據此辨識
 HOOK_MARKER = str(SKINS_DIR)
@@ -261,6 +262,11 @@ def cmd_photo(image: str, crop: str) -> None:
     if subprocess.run(jpg_cmd, capture_output=True).returncode != 0:
         die("產生 photo.jpg 失敗")
 
+    # 桌面 app 只吃相對於工作目錄的圖片路徑。放一份到 ~/.claude/claude-skin/，
+    # 從任何目錄算相對路徑都只會是一串 ..，不會出現空白，免跳脫。
+    RENDER_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(skin / "photo.jpg", RENDER_DIR / f"{skin.name}.jpg")
+
     print(f"✓ 照片已換成 {src.name}")
     if not crop:
         print("  沒裁切的話會用整張圖。想只留臉：claude-skin photo <圖> -c WxH+X+Y")
@@ -323,6 +329,11 @@ def cmd_restore() -> None:
     installed = state.get("installed_style")
     if installed and Path(installed).exists():
         Path(installed).unlink()
+
+    # 移掉渲染用的照片副本
+    render_copy = RENDER_DIR / f"{state['skin']}.jpg"
+    if render_copy.exists():
+        render_copy.unlink()
 
     skin = state["skin"]
     write_json(STATE, {})

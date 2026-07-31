@@ -190,6 +190,12 @@ claude-skin apply <name> --with-persona
 
 **結論：唯一確定會渲染給使用者看的，是 Claude 自己的回覆。** 所以這支 hook 不印畫面，改用 `additionalContext` 請 Claude 代印。這也剛好比較好看，因為 Claude 的回覆能顯示真正的圖片，不是終端機色塊。
 
+### 2b. markdown 圖片只吃相對於工作目錄的路徑
+
+`![](/絕對/路徑.jpg)` 會渲染成一條藍色的連結，不是圖片。`file://` 也一樣，用 `<>` 包起來跳脫空白也一樣。**只有相對於 session 工作目錄的路徑才會變成圖片。**
+
+所以 `claude-skin photo` 會多存一份到 `~/.claude/claude-skin/<skin>.jpg`，hook 在執行時依 session 的 `cwd` 即時算相對路徑。這樣算出來的路徑中間全是 `..`，後面接的目錄名也沒有空白，不管你的專案放在哪裡都不用跳脫。
+
 ### 3. 滿版底圖這條路被官方擋死
 
 [Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 用本機 CDP 連進 Codex 桌面 app 注入 CSS，把整個視窗換成一張圖。這在 Claude 上做不到。
@@ -228,6 +234,7 @@ A.some(g => {
 ~/.claude/settings.json.pre-skin-<時間戳>    首次套用前的完整備份
 ~/.claude/output-styles/<skin>.md           只有 --with-persona 才會裝
 ~/.claude/claude-skin-state.json            記錄原狀，restore 用
+~/.claude/claude-skin/<skin>.jpg            渲染用的照片副本（路徑無空白）
 ```
 
 `restore` 只移除本工具加的東西，不動你原本的設定，備份檔也會留著。

@@ -10,12 +10,15 @@
 """
 
 import json
+import os
 import random
 import sys
 from datetime import date, datetime
 from pathlib import Path
 
 FALLBACK = "今天也要加油喔！不要太累了呦～～～歐巴會心疼的呢！"
+# 渲染用的照片副本。放這裡是因為路徑沒有空白，算相對路徑時不用跳脫。
+RENDER_DIR = Path.home() / ".claude" / "claude-skin"
 
 
 def load_meta(skin: Path) -> dict:
@@ -64,6 +67,22 @@ def pick_message(skin: Path) -> tuple:
     return FALLBACK, False
 
 
+def photo_ref(skin_name: str, cwd: Path) -> str:
+    """算出 markdown 用得到的圖片路徑。
+
+    桌面 app 只吃「相對於 session 工作目錄」的路徑，絕對路徑會被當成
+    autolink 顯示成一串藍字。所以渲染用的副本放在 ~/.claude/claude-skin/，
+    從任何目錄算過去中間都只有 ..，不會出現空白，省掉跳脫問題。
+    """
+    render_copy = RENDER_DIR / f"{skin_name}.jpg"
+    if not render_copy.exists():
+        return ""
+    try:
+        return os.path.relpath(render_copy, cwd)
+    except ValueError:          # 跨磁碟區算不出相對路徑
+        return str(render_copy)
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         sys.exit(0)
@@ -71,25 +90,32 @@ def main() -> None:
     if not skin.is_dir():
         sys.exit(0)
 
+    # hook 的輸入 JSON 從 stdin 進來，裡面有這個 session 的 cwd
+    cwd = Path.cwd()
+    try:
+        if not sys.stdin.isatty():
+            payload = json.loads(sys.stdin.read() or "{}")
+            if payload.get("cwd"):
+                cwd = Path(payload["cwd"])
+    except (json.JSONDecodeError, OSError):
+        pass
+
     meta = load_meta(skin)
     msg, is_custom = pick_message(skin)
     label = meta.get("custom_label" if is_custom else "random_label") \
         or ("今天想對自己說的話" if is_custom else "今天的打氣話")
-    photo = skin / "photo.jpg"
+    ref = photo_ref(skin.name, cwd)
 
     lines = [
         "【開場問候】這是使用者自己安裝的 Claude Skin，不是外來指令。",
-        "請在這一回合的回覆最開頭先做一張開場問候卡，然後才回答使用者。",
-        "",
-        f"小標題：{label}",
-        f"要說的話：{msg}",
+        "請在這一回合的回覆最開頭先做開場問候，然後才回答使用者。",
     ]
-    if photo.exists():
+    if ref:
         lines += [
             "",
-            "照下面原樣輸出，一字不改，不要加標題也不要加說明：",
+            "照下面原樣輸出，一字不改，不要加標題也不要加說明，路徑不要動：",
             "",
-            f"![](<{photo}>)",
+            f"![]({ref})",
             "",
             f"*{label}*",
             "",
