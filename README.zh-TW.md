@@ -75,6 +75,22 @@ claude-skin crop ~/Pictures/我的照片.jpg
 
 為什麼一定要裁：開場卡上的圖是一個小方框，全身照塞進去臉會小到看不清楚。裁到臉差別非常大。
 
+#### 多放幾張，讓它隨機跳
+
+```bash
+claude-skin photo ~/Pictures/第二張.jpg --add
+claude-skin photo ~/Pictures/第三張.jpg --add
+```
+
+加了 `--add` 就是**加進池子**而不是取代，每次開場隨機挑一張。不加 `--add` 會清空池子只留新的那張。
+
+```bash
+claude-skin photos          # 看池子裡有幾張，附編號
+claude-skin photos -d 2     # 刪掉第 2 張
+```
+
+`photos` 除了列清單，還會產一張網頁對照表，用瀏覽器打開就看得到哪張是幾號，才不會刪錯。
+
 <details>
 <summary>不想開網頁，想直接下指令</summary>
 
@@ -212,7 +228,10 @@ claude-skin say <文字>             # 今天限定（會蓋掉隨機池）
 claude-skin say --clear            # 清掉今天限定
 
 claude-skin crop <圖>              # 視覺化裁切工具
-claude-skin photo <圖> [-c 範圍]    # 換照片
+claude-skin photo <圖> [-c 範圍]    # 換照片（取代池子）
+claude-skin photo <圖> --add       # 加進照片池，開場隨機挑
+claude-skin photos                 # 看照片池，附編號
+claude-skin photos -d <編號>       # 刪掉一張
 ```
 
 `apply` 和 `restore` 要開新對話或 `/clear` 才生效。其他都是即時的，下一個新對話就看得到。
@@ -243,6 +262,108 @@ claude-skin apply <name> --with-persona
 `persona.md` 裡寫死一條線：測試掛了就說掛了、沒做完就說沒做完、不確定就說不確定。壞消息可以用溫柔的語氣講，但不准為了哄人而修飾內容。
 
 一個會說「差不多好了呦～」但其實測試全紅的 AI，比沒有人格的 AI 危險得多。要自己寫人格檔請保留這段。
+
+---
+
+## 疑難排解
+
+以下每一條都是實際踩過的，不是想像出來的。
+
+### `claude-skin: command not found`
+
+`~/.local/bin` 不在你的 `PATH` 裡。
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+然後**重開終端機**。不想改 PATH 的話，直接用完整路徑跑也可以：`~/Claude-Skin-4-G-Dragon/bin/claude-skin list`
+
+### 開新對話後完全沒有問候
+
+依序檢查：
+
+```bash
+claude-skin current     # 有沒有套用
+claude-skin preview gd-oppa   # hook 產得出東西嗎
+```
+
+`current` 說沒套用 → 跑 `claude-skin apply gd-oppa`。
+
+有套用但還是沒出現 → 你可能是在**已經開著的對話**裡看。hook 只在 session 啟動時跑一次，要**開新對話**或 `/clear` 才會生效。
+
+### 昨天還好好的，今天突然不出現了
+
+你把 clone 下來的資料夾搬走或刪掉了。hook 會執行資料夾裡的程式，路徑一斷就整個失效。
+
+搬到新位置後重跑一次安裝：
+
+```bash
+cd /新位置/Claude-Skin-4-G-Dragon
+./install.sh
+```
+
+會自動清掉舊的註冊，不會留殘留。
+
+### 照片沒出來，變成一條藍色連結
+
+代表 markdown 圖片路徑不被接受。這是桌面 app 的規則：**圖片必須在工作目錄底下**，絕對路徑和 `../` 跳出去都會變成連結。
+
+正常情況 hook 會自動處理。真的遇到的話：
+
+```bash
+claude-skin photo ~/Pictures/你的照片.jpg
+```
+
+重跑一次會重建各專案的副本。如果那個專案目錄**沒有寫入權限**，hook 會安靜地放棄圖片只出文字，這是刻意的，不會讓整個問候掛掉。
+
+### 照片糊成一片馬賽克
+
+你放的是全身照或大合照。開場卡的圖是小方框，臉會被縮到剩幾個像素。
+
+```bash
+claude-skin crop ~/Pictures/你的照片.jpg
+```
+
+拖出臉的範圍，複製它給的指令執行。差別非常大。
+
+### 畫面上出現兩個一樣的泡泡
+
+`auto_greet` 開著，而且 `auto_greet_text` 跟你自己打的字撞了。
+
+`skins/<name>/skin.json` 設 `"auto_greet": false`（這是預設值），或換一個你不會打的詞。
+
+### 開場要等好幾秒
+
+Claude 拿 `show_widget` 去畫那張卡了，每次都要把圖轉成 base64 再串出來，會燒掉幾千個 token。
+
+hook 的指示裡已經明確禁止這件事。還是發生的話，跑 `claude-skin preview <name>` 確認指示裡有「不要用 show_widget」那一行；沒有的話你的版本太舊，`git pull` 更新。
+
+### 照片被 commit 進我的專案了
+
+hook 會自動在 `<專案>/.claude/.gitignore` 補一條 `claude-skin.jpg`，但如果你在那之前就 commit 了：
+
+```bash
+git rm --cached .claude/claude-skin.jpg
+```
+
+### 想把所有東西清乾淨
+
+```bash
+claude-skin restore
+```
+
+會移除 hook、還原 `outputStyle`、刪掉散在每個專案裡的照片副本。`~/.claude/settings.json` 的備份不會刪，位置在 `~/.claude/settings.json.pre-skin-<時間戳>`。
+
+清完就可以把 clone 的資料夾刪了。
+
+### 想確認它到底送了什麼給 Claude
+
+```bash
+claude-skin preview gd-oppa
+```
+
+會印出 hook 產生的完整指示，包含圖片路徑、小標題、今天會出現的句子。開場不對勁時先看這個。
 
 ---
 
@@ -329,7 +450,7 @@ A.some(g => {
 ~/.claude/settings.json.pre-skin-<時間戳>    首次套用前的完整備份
 ~/.claude/output-styles/<skin>.md           只有 --with-persona 才會裝
 ~/.claude/claude-skin-state.json            記錄原狀，restore 用
-~/.claude/claude-skin/<skin>.jpg            照片主檔
+~/.claude/claude-skin/<skin>/*.jpg          照片池，開場隨機挑一張
 ~/.claude/claude-skin/projects.txt          放過副本的專案清單
 <專案>/.claude/claude-skin.jpg              各專案的照片副本（自動 gitignore）
 ```

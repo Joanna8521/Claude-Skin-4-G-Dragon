@@ -80,22 +80,34 @@ def photo_ref(skin_name: str, cwd: Path) -> str:
     隱藏目錄可以（實測 .claude/ 底下正常渲染），所以放 .claude/，
     順便寫一條 .gitignore 免得被誤 commit 進使用者的專案。
     """
-    master = RENDER_DIR / f"{skin_name}.jpg"
-    if not master.exists():
+    master = pick_photo(skin_name)
+    if not master:
         return ""
 
     dest_dir = cwd / ".claude"
     dest = dest_dir / "claude-skin.jpg"
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
-        if not dest.exists() or dest.stat().st_size != master.stat().st_size:
-            shutil.copy2(master, dest)
-            _remember_project(cwd)
+        # 每次都覆蓋：照片是隨機挑的，比對大小會誤判成「一樣就不用複製」
+        shutil.copy2(master, dest)
+        _remember_project(cwd)
         _ensure_gitignore(dest_dir)
     except OSError:
         return ""                     # 目錄不能寫就放棄圖片，文字照樣出
 
     return ".claude/claude-skin.jpg"
+
+
+def pick_photo(skin_name: str):
+    """從照片池隨機挑一張。池子是空的就回 None，問候只出文字。"""
+    pool_dir = RENDER_DIR / skin_name
+    if pool_dir.is_dir():
+        pool = sorted(p for p in pool_dir.glob("*.jpg") if p.is_file())
+        if pool:
+            return random.choice(pool)
+
+    legacy = RENDER_DIR / f"{skin_name}.jpg"      # 舊版的單張檔案
+    return legacy if legacy.exists() else None
 
 
 def _ensure_gitignore(claude_dir: Path) -> None:

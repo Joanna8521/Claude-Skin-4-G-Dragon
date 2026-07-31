@@ -18,8 +18,10 @@
   claude-skin lines             看池子裡有哪些句子
   claude-skin lines -d <編號>   刪掉其中一句
   claude-skin crop <圖>         開一個網頁用拖的決定裁切範圍，產生下面那行指令
-  claude-skin photo <圖> [-c WxH+X+Y]
-                                換掉開場照片，-c 可先裁切
+  claude-skin photo <圖> [-c WxH+X+Y] [--add]
+                                換照片。--add 是加進池子，開場隨機挑
+  claude-skin photos            看照片池，附編號
+  claude-skin photos -d <編號>  刪掉其中一張
 
 會動到的檔案：
   ~/.claude/settings.json                加 hooks.SessionStart（--with-persona 才動 outputStyle）
@@ -33,6 +35,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
 
@@ -329,7 +332,7 @@ def cmd_lines(delete: int) -> None:
     print("刪一句：claude-skin lines -d <編號>")
 
 
-def cmd_photo(image: str, crop: str) -> None:
+def cmd_photo(image: str, crop: str, add: bool) -> None:
     skin = _active_skin_dir()
     src = Path(image).expanduser()
     if not src.exists():
@@ -348,16 +351,86 @@ def cmd_photo(image: str, crop: str) -> None:
     if subprocess.run(jpg_cmd, capture_output=True).returncode != 0:
         die("產生 photo.jpg 失敗")
 
-    # 桌面 app 只吃相對於工作目錄的圖片路徑。放一份到 ~/.claude/claude-skin/，
-    # 從任何目錄算相對路徑都只會是一串 ..，不會出現空白，免跳脫。
-    RENDER_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(skin / "photo.jpg", RENDER_DIR / f"{skin.name}.jpg")
+    # 照片池放在 ~/.claude/claude-skin/<skin>/，開場時隨機挑一張
+    pool = RENDER_DIR / skin.name
+    pool.mkdir(parents=True, exist_ok=True)
 
-    print(f"✓ 照片已換成 {src.name}")
+    if not add:
+        for old in pool.glob("*.jpg"):
+            old.unlink()
+        legacy = RENDER_DIR / f"{skin.name}.jpg"     # 舊版的單張檔案
+        if legacy.exists():
+            legacy.unlink()
+
+    existing = sorted(int(p.stem) for p in pool.glob("*.jpg") if p.stem.isdigit())
+    slot = (existing[-1] + 1) if existing else 1
+    shutil.copy2(skin / "photo.jpg", pool / f"{slot}.jpg")
+    total = len(list(pool.glob("*.jpg")))
+
+    if add:
+        print(f"✓ 已加入 {src.name}，照片池現在有 {total} 張，開場隨機挑一張")
+    else:
+        print(f"✓ 照片已換成 {src.name}")
+        print("  想多放幾張隨機跳：claude-skin photo <圖> --add")
     if not crop:
-        print("  沒裁切的話會用整張圖。想只留臉：claude-skin photo <圖> -c WxH+X+Y")
+        print("  沒裁切的話會用整張圖。想只留臉：claude-skin crop <圖>")
     print()
     print("開新對話就會看到。")
+
+
+def cmd_photos(delete: int) -> None:
+    """列出照片池，順便產一張對照表讓你看得到哪張是哪張。"""
+    skin = _active_skin_dir()
+    pool = RENDER_DIR / skin.name
+    shots = sorted(pool.glob("*.jpg"), key=lambda p: int(p.stem) if p.stem.isdigit() else 0)
+
+    if delete is not None:
+        if not 1 <= delete <= len(shots):
+            die(f"沒有第 {delete} 張，先跑 claude-skin photos 看編號")
+        shots[delete - 1].unlink()
+        print(f"✓ 已刪除第 {delete} 張，剩 {len(shots) - 1} 張")
+        return
+
+    if not shots:
+        print("照片池是空的，開場只會出文字。")
+        print("放照片：claude-skin photo ~/Pictures/你的圖.jpg")
+        return
+
+    print(f"照片池共 {len(shots)} 張，開場隨機挑一張：\n")
+    for i, p in enumerate(shots, 1):
+        print(f"  {i:>3}  {p.stat().st_size // 1024:>4} KB")
+
+    sheet = _contact_sheet(shots)
+    print()
+    print(f"看哪張是哪張：open \"{sheet}\"")
+    print("刪掉一張：claude-skin photos -d <編號>")
+
+
+def _contact_sheet(shots: list) -> Path:
+    """把照片池排成一張網頁，圖片內嵌成 data URI，不依賴外部檔案。"""
+    import base64
+    cards = []
+    for i, p in enumerate(shots, 1):
+        b64 = base64.b64encode(p.read_bytes()).decode()
+        cards.append(
+            f'<figure><img src="data:image/jpeg;base64,{b64}" alt="">'
+            f'<figcaption>{i}</figcaption></figure>'
+        )
+    html = (
+        '<!doctype html><meta charset="utf-8"><title>照片池</title><style>'
+        'body{margin:0;background:#161616;color:#ddd;'
+        'font:14px/1.6 -apple-system,"PingFang TC",system-ui,sans-serif}'
+        '.g{display:flex;flex-wrap:wrap;gap:16px;padding:24px}'
+        'figure{margin:0;text-align:center}'
+        'img{width:150px;height:150px;object-fit:cover;border-radius:12px;display:block}'
+        'figcaption{margin-top:6px;color:#8a8a8a;font-size:13px}'
+        'p{padding:0 24px 24px;color:#8a8a8a;margin:0}'
+        '</style><div class="g">' + "".join(cards) + "</div>"
+        "<p>刪掉某一張：<code>claude-skin photos -d 編號</code></p>"
+    )
+    out = Path(tempfile.gettempdir()) / "claude-skin-photos.html"
+    out.write_text(html, encoding="utf-8")
+    return out
 
 
 def _parse_crop(spec: str) -> tuple:
@@ -496,6 +569,11 @@ def main() -> None:
         ap.add_argument("-d", "--delete", type=int)
         opts = ap.parse_args(rest)
         cmd_lines(opts.delete)
+    elif cmd == "photos":
+        ap = argparse.ArgumentParser(prog="claude-skin photos")
+        ap.add_argument("-d", "--delete", type=int)
+        opts = ap.parse_args(rest)
+        cmd_photos(opts.delete)
     elif cmd == "crop":
         if not rest:
             die("crop 要給圖片路徑")
@@ -506,8 +584,10 @@ def main() -> None:
         ap.add_argument("image")
         ap.add_argument("-c", "--crop", metavar="WxH+X+Y",
                         help="先裁切再縮圖，X/Y 是左上角座標")
+        ap.add_argument("--add", action="store_true",
+                        help="加進照片池而不是取代，開場會隨機挑")
         opts = ap.parse_args(rest)
-        cmd_photo(opts.image, opts.crop)
+        cmd_photo(opts.image, opts.crop, opts.add)
     elif cmd == "restore":
         cmd_restore()
     else:

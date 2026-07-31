@@ -75,6 +75,22 @@ It writes a web page — open it in a browser. Your photo has a pink box on it: 
 
 Why cropping matters: the greeting shows a small square. A full-body shot shrinks the face to almost nothing. Cropping to the face makes a large difference.
 
+#### Several photos, picked at random
+
+```bash
+claude-skin photo ~/Pictures/second.jpg --add
+claude-skin photo ~/Pictures/third.jpg --add
+```
+
+`--add` **adds to the pool** instead of replacing it, and one is picked at random each session. Without `--add`, the pool is cleared and only the new photo remains.
+
+```bash
+claude-skin photos          # list the pool, numbered
+claude-skin photos -d 2     # delete photo 2
+```
+
+`photos` also writes a contact sheet you can open in a browser, so you can see which number is which before deleting.
+
 <details>
 <summary>Skip the browser, use flags instead</summary>
 
@@ -212,7 +228,10 @@ claude-skin say <text>            # today only (overrides the pool)
 claude-skin say --clear           # drop today's line
 
 claude-skin crop <image>          # visual crop picker
-claude-skin photo <image> [-c]    # set the photo
+claude-skin photo <image> [-c]    # set the photo (replaces the pool)
+claude-skin photo <image> --add   # add to the pool, picked at random
+claude-skin photos                # list the pool, numbered
+claude-skin photos -d <n>         # delete one
 ```
 
 `apply` and `restore` need a new conversation or `/clear`. Everything else applies to your next new conversation.
@@ -243,6 +262,108 @@ Installs `persona.md` as a Claude Code output style. **Off by default** — with
 `persona.md` holds one hard rule: if tests fail, say they failed; if something isn't done, say so; if you're unsure, say you're unsure. Bad news can be delivered warmly, but never softened into inaccuracy.
 
 An AI that says "almost there!" while the tests are all red is more dangerous than one with no personality at all. Keep that section if you write your own.
+
+---
+
+## Troubleshooting
+
+Every entry here is something that actually happened while building this.
+
+### `claude-skin: command not found`
+
+`~/.local/bin` isn't on your `PATH`.
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+Then **restart your terminal**. Or skip `PATH` entirely and use the full path: `~/Claude-Skin-4-G-Dragon/bin/claude-skin list`
+
+### No greeting at all in a new conversation
+
+Check in this order:
+
+```bash
+claude-skin current            # is a skin applied?
+claude-skin preview gd-oppa    # does the hook produce output?
+```
+
+If `current` says nothing is applied, run `claude-skin apply gd-oppa`.
+
+If it is applied and you still see nothing, you're probably looking at an **already-open conversation**. The hook runs once at session start — you need a **new conversation** or `/clear`.
+
+### It worked yesterday, nothing today
+
+You moved or deleted the cloned folder. The hook executes scripts from it, so a broken path kills the greeting.
+
+Re-run the installer from wherever it lives now:
+
+```bash
+cd /new/path/Claude-Skin-4-G-Dragon
+./install.sh
+```
+
+It clears the old registration, so nothing is left behind.
+
+### The photo shows up as a blue link instead of an image
+
+The markdown image path was rejected. Desktop-app rule: **the image must resolve inside the working directory.** Absolute paths and `../` escapes both degrade to links.
+
+The hook handles this automatically. If it still happens:
+
+```bash
+claude-skin photo ~/Pictures/me.jpg
+```
+
+That rebuilds the per-project copies. Note that if a project directory isn't writable, the hook silently drops the image and shows text only — deliberate, so one bad directory can't break the whole greeting.
+
+### The photo is an unrecognizable blur
+
+You used a full-body or group shot. The greeting shows a small square, so a face gets shrunk to a handful of pixels.
+
+```bash
+claude-skin crop ~/Pictures/me.jpg
+```
+
+Drag a box around the face and run the command it gives you. The difference is large.
+
+### Two identical message bubbles
+
+`auto_greet` is on and `auto_greet_text` collides with something you type often.
+
+Set `"auto_greet": false` in `skins/<name>/skin.json` (that's the default), or pick a word you'd never type.
+
+### The greeting takes several seconds
+
+Claude used `show_widget` to build the card, which means base64-encoding the image and streaming it every session — thousands of tokens.
+
+The hook explicitly forbids this. If it still happens, run `claude-skin preview <name>` and check the instructions contain the "don't use show_widget" line. If they don't, your copy is out of date — `git pull`.
+
+### The photo got committed to my project
+
+The hook appends `claude-skin.jpg` to `<project>/.claude/.gitignore`, but if you committed before that:
+
+```bash
+git rm --cached .claude/claude-skin.jpg
+```
+
+### Remove everything
+
+```bash
+claude-skin restore
+```
+
+Removes the hook, restores `outputStyle`, and deletes every per-project photo copy. Your settings backup is kept at `~/.claude/settings.json.pre-skin-<timestamp>`.
+
+After that you can delete the cloned folder.
+
+### See exactly what gets sent to Claude
+
+```bash
+claude-skin preview gd-oppa
+```
+
+Prints the full instruction the hook generates — image path, caption, and the line that will appear. Start here whenever the greeting looks wrong.
 
 ---
 
@@ -329,7 +450,7 @@ The greeting appears at the **top of Claude's reply**, not on the app's home scr
 ~/.claude/settings.json.pre-skin-<stamp>    full backup before first apply
 ~/.claude/output-styles/<skin>.md           only with --with-persona
 ~/.claude/claude-skin-state.json            records prior state for restore
-~/.claude/claude-skin/<skin>.jpg            master copy of your photo
+~/.claude/claude-skin/<skin>/*.jpg          photo pool, one picked at random
 ~/.claude/claude-skin/projects.txt          projects that received a copy
 <project>/.claude/claude-skin.jpg           per-project copy (auto-gitignored)
 ```
