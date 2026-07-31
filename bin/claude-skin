@@ -10,18 +10,23 @@
                                 連 Claude 的講話語氣一起換（可選）
   claude-skin restore           還原成套用前的設定
 
+  claude-skin say <文字>        設定今天想對自己說的話（只當天有效）
+  claude-skin say --clear       清掉，改回隨機招呼語
+  claude-skin photo <圖片路徑>  換掉開場照片（自動轉成終端機色塊）
+
 會動到的檔案：
   ~/.claude/settings.json                加 hooks.SessionStart（--with-persona 才動 outputStyle）
   ~/.claude/output-styles/<name>.md      只有 --with-persona 才會裝
   ~/.claude/claude-skin-state.json       記錄套用前的原狀，供 restore 使用
 """
 
+import argparse
 import json
 import os
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -199,6 +204,62 @@ def _is_ours(group: dict) -> bool:
     return False
 
 
+def _active_skin_dir() -> Path:
+    state = read_json(STATE, {})
+    if not state.get("skin"):
+        die("目前沒有套用任何 skin，先跑 claude-skin apply <name>")
+    return SKINS_DIR / state["skin"]
+
+
+def cmd_say(words: list) -> None:
+    skin = _active_skin_dir()
+    today_file = skin / "today.txt"
+
+    if words and words[0] == "--clear":
+        if today_file.exists():
+            today_file.unlink()
+        print("✓ 已清掉今天的自訂話，改回隨機招呼語")
+        return
+
+    if not words:
+        if today_file.exists():
+            raw = today_file.read_text(encoding="utf-8").strip()
+            stamp, _, msg = raw.partition("|")
+            if stamp.strip() == date.today().isoformat():
+                print(f"今天設定的是：{msg.strip()}")
+                return
+        print("今天還沒設，會用隨機招呼語。設定：claude-skin say \"你想說的話\"")
+        return
+
+    msg = " ".join(words).strip()
+    today_file.write_text(f"{date.today().isoformat()}|{msg}\n", encoding="utf-8")
+    print(f"✓ 今天的話：{msg}")
+    print("  只有今天有效，明天會自動換回隨機招呼語。")
+
+
+def cmd_photo(image: str, width: int, crop: str) -> None:
+    skin = _active_skin_dir()
+    src = Path(image).expanduser()
+    if not src.exists():
+        die(f"找不到圖片 {src}")
+
+    cmd = [sys.executable, str(REPO / "bin" / "photo2ansi"), str(src),
+           "-w", str(width), "-o", str(skin / "photo.ansi"), "--indent", "  "]
+    if crop:
+        cmd += ["-c", crop]
+
+    if subprocess.run(cmd).returncode != 0:
+        die("轉檔失敗")
+
+    if not crop:
+        print()
+        print("提醒：全身照縮到這個尺寸，臉大概只剩十幾個像素，會糊成一片。")
+        print("     裁到臉再試一次會差很多：claude-skin photo <圖> -c WxH+X+Y")
+    print()
+    print("開新 session 或 /clear 就會看到。想先看效果：")
+    print(f"  bash \"{skin / 'banner.sh'}\"")
+
+
 def cmd_restore() -> None:
     state = read_json(STATE, {})
     if not state.get("skin"):
@@ -262,6 +323,16 @@ def main() -> None:
         if not names:
             die("apply 要給 skin 名稱")
         cmd_apply(names[0], with_persona)
+    elif cmd == "say":
+        cmd_say(rest)
+    elif cmd == "photo":
+        ap = argparse.ArgumentParser(prog="claude-skin photo")
+        ap.add_argument("image")
+        ap.add_argument("-w", "--width", type=int, default=52)
+        ap.add_argument("-c", "--crop", metavar="WxH+X+Y",
+                        help="先裁切再縮圖，X/Y 是左上角座標")
+        opts = ap.parse_args(rest)
+        cmd_photo(opts.image, opts.width, opts.crop)
     elif cmd == "restore":
         cmd_restore()
     else:

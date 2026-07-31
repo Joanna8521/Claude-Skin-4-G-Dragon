@@ -1,0 +1,15 @@
+# 個人素材，不進 repo
+# photo.ansi 是使用者自己那張照片的衍生物，多半有版權，別散布
+skins/*/photo.ansi
+skins/*/today.txt
+
+# 來源圖檔
+*.avif
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.heic
+
+.DS_Store
+__pycache__/

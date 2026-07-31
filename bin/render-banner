@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""render-banner: 組出「左邊照片、右邊打氣話」的開場畫面。
+
+    render-banner <skin 目錄>
+
+左欄是 photo.ansi（photo2ansi 事先轉好的色塊）。沒有的話退回 art.txt 字元畫。
+右欄的字依序找：
+  1. today.txt 且日期是今天  → 用你自己設的話
+  2. greetings.txt 依當下時段隨機挑
+  3. 內建預設句
+
+環境變數：
+  CLAUDE_SKIN_COLOR=0  關掉顏色（照片欄會整個略過，因為沒顏色就沒意義）
+  CLAUDE_SKIN_QUIET=1  只印一行字，不印照片
+"""
+
+import os
+import random
+import re
+import sys
+import unicodedata
+from datetime import date, datetime
+from pathlib import Path
+
+FALLBACK = "今天也要加油喔！不要太累了呦～～～歐巴會心疼的呢！"
+ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def char_width(ch: str) -> int:
+    """全形字算兩格，這樣中文才對得齊。"""
+    if unicodedata.east_asian_width(ch) in ("W", "F"):
+        return 2
+    if unicodedata.combining(ch):
+        return 0
+    return 1
+
+
+def display_width(s: str) -> int:
+    return sum(char_width(c) for c in ANSI_RE.sub("", s))
+
+
+def wrap_cjk(text: str, limit: int) -> list:
+    """逐字斷行，中文沒有空白可以斷。標點不放行首。"""
+    no_lead = "，。！？、；：）」』～"
+    lines, cur, w = [], "", 0
+    for ch in text:
+        cw = char_width(ch)
+        if w + cw > limit and cur:
+            if ch in no_lead:          # 標點跟著上一行走
+                cur += ch
+                lines.append(cur)
+                cur, w = "", 0
+                continue
+            lines.append(cur)
+            cur, w = ch, cw
+        else:
+            cur += ch
+            w += cw
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def time_slot(hour: int) -> str:
+    if 5 <= hour < 11:
+        return "morning"
+    if 11 <= hour < 18:
+        return "afternoon"
+    if 18 <= hour < 23:
+        return "night"
+    return "latenight"
+
+
+def pick_message(skin: Path) -> tuple:
+    """回傳 (訊息, 是否為使用者今日自訂)。"""
+    today_file = skin / "today.txt"
+    if today_file.exists():
+        raw = today_file.read_text(encoding="utf-8").strip()
+        if "|" in raw:
+            stamp, _, msg = raw.partition("|")
+            if stamp.strip() == date.today().isoformat() and msg.strip():
+                return msg.strip(), True
+
+    greetings = skin / "greetings.txt"
+    if greetings.exists():
+        slot = time_slot(datetime.now().hour)
+        pool = []
+        for line in greetings.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "|" not in line:
+                continue
+            tag, _, text = line.partition("|")
+            if tag.strip() in (slot, "any") and text.strip():
+                pool.append(text.strip())
+        if pool:
+            return random.choice(pool), False
+
+    return FALLBACK, False
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        print("用法：render-banner <skin 目錄>", file=sys.stderr)
+        sys.exit(1)
+
+    skin = Path(sys.argv[1])
+    if not skin.is_dir():
+        print(f"錯誤：找不到 skin 目錄 {skin}", file=sys.stderr)
+        sys.exit(1)
+
+    color = os.environ.get("CLAUDE_SKIN_COLOR", "1") != "0"
+    quiet = os.environ.get("CLAUDE_SKIN_QUIET", "0") == "1"
+
+    msg, is_custom = pick_message(skin)
+
+    A = "\033[38;5;204m" if color else ""      # 桃粉，配他的頭髮
+    D = "\033[38;5;245m" if color else ""
+    B = "\033[1m" if color else ""
+    R = "\033[0m" if color else ""
+
+    if quiet:
+        print(f"{A}👑{R} {B}{msg}{R}")
+        return
+
+    # ---- 左欄 ----
+    art = []
+    photo = skin / "photo.ansi"
+    if color and photo.exists():
+        art = photo.read_text(encoding="utf-8").rstrip("\n").split("\n")
+    else:
+        fallback_art = skin / "art.txt"
+        if fallback_art.exists():
+            art = fallback_art.read_text(encoding="utf-8").rstrip("\n").split("\n")
+
+    if not art:
+        print(f"{A}👑{R} {B}{msg}{R}")
+        return
+
+    art_w = max(display_width(l) for l in art)
+
+    # ---- 右欄 ----
+    TEXT_W = 34
+    body = wrap_cjk(msg, TEXT_W)
+    tag = "今天想對自己說的話" if is_custom else "歐巴今天想說"
+    right = [f"{D}{tag}{R}", ""] + [f"{B}{A}{l}{R}" for l in body]
+
+    # 右欄相對左欄垂直置中
+    pad = max(0, (len(art) - len(right)) // 2)
+    right = [""] * pad + right
+
+    # ---- 併排 ----
+    GAP = "   "
+    rows = max(len(art), len(right))
+    out = []
+    for i in range(rows):
+        left = art[i] if i < len(art) else ""
+        # 補到等寬，右欄才會對齊；補完要收掉顏色免得漏色
+        filler = " " * (art_w - display_width(left))
+        text = right[i] if i < len(right) else ""
+        line = f"{left}{R if left and color else ''}{filler}{GAP}{text}".rstrip()
+        out.append(line)
+
+    print()
+    print("\n".join(out))
+    print()
+
+
+if __name__ == "__main__":
+    main()
