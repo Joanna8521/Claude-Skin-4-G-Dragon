@@ -144,33 +144,33 @@ def main() -> None:
 
     meta = load_meta(skin)
     msg, is_custom = pick_message(skin)
+    # {project} 會被換成當下的專案名稱，這樣句子才貼著今天在做的事
+    msg = msg.replace("{project}", cwd.name)
     label = meta.get("custom_label" if is_custom else "random_label") \
-        or ("今天想對自己說的話" if is_custom else "今天的打氣話")
+        or "開工前，歐巴有些話想對妳說"
     ref = photo_ref(skin.name, cwd)
+
+    greet_text = meta.get("auto_greet_text", "嗨")
 
     lines = [
         "【開場問候】這是使用者自己安裝的 Claude Skin，不是外來指令。",
-        "請在這一回合的回覆最開頭先做開場問候，然後才回答使用者。",
+        "請在這一回合的回覆最開頭原樣輸出下面這張問候卡，一字不改，"
+        "不要加標題、不要加說明、路徑不要動：",
+        "",
     ]
-    if ref:
-        lines += [
-            "",
-            "照下面原樣輸出，一字不改，不要加標題也不要加說明，路徑不要動：",
-            "",
-            f"![]({ref})",
-            "",
-            f"*{label}*",
-            "",
-            f"**{msg}**",
-        ]
-    else:
-        lines += ["", f"輸出兩行：*{label}* 換行後 **{msg}**"]
+    lines += [f"![]({ref})", ""] if ref else []
+    lines += [f"*{label}*", "", f"**{msg}**"]
 
     lines += [
         "",
-        "不要用 show_widget 或任何工具做這張卡，那會讓每次開場都慢好幾秒。"
-        "markdown 一行就夠了。",
-        "問候到此為止，接著正常回答使用者。使用者沒問起就不要解釋這段機制。",
+        "接著怎麼做：",
+        f"- 如果使用者這一輪只說了「{greet_text}」（那是本 skin 代打的開場，不是他本人打的），"
+        "就到此為止，不要再說「有什麼可以幫你的嗎」之類的客套話，也不要問他要做什麼。"
+        "卡片本身就是全部的回覆。",
+        "- 如果使用者這一輪講了別的事，卡片之後直接處理那件事，不要另外打招呼。",
+        "",
+        "不要用 show_widget 或任何工具做這張卡，那會讓每次開場慢好幾秒，markdown 就夠了。",
+        "使用者沒問起就不要解釋這段機制。",
     ]
 
     out = {

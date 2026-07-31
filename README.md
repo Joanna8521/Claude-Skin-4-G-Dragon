@@ -59,8 +59,10 @@ That's `width x height + leftX + topY`, in source-image pixels.
 ### 3. Set today's message
 
 ```bash
-claude-skin say "Just ship it today"
+claude-skin say "Just ship {project} today"
 ```
+
+`{project}` is replaced with the name of whatever project you're in, so one line stays relevant everywhere.
 
 ### 4. Open a new conversation
 
@@ -117,7 +119,9 @@ The caption above the message lives in `skins/<name>/skin.json`:
 
 The greeting is rendered by Claude's reply, so normally you'd have to send a message before it appears.
 
-By default the hook uses `initialUserMessage` to send a short "hi" for you, so the greeting shows up the moment you open a conversation. The cost: a message bubble you didn't type, and one model turn per session.
+By default the hook uses `initialUserMessage` to send a short opener for you, so the greeting shows up the moment you open a conversation without typing anything.
+
+The cost is a visible message bubble you didn't type — there's no way for Claude to speak first without one. Pick an opener that reads naturally as something you'd say (the default is a single word), and don't reuse a word you often type yourself, or you'll see what looks like a stutter.
 
 Turn it off in `skin.json`:
 

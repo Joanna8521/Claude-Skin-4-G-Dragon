@@ -6,7 +6,8 @@
   "version": "1.0.0",
   "persona": "persona.md",
   "greetings": "greetings.txt",
-  "custom_label": "今天想對親愛的妳說的話",
-  "random_label": "歐巴今天想說",
-  "hook": "greet-hook"
+  "custom_label": "開工前，歐巴有些話想對妳說",
+  "random_label": "開工前，歐巴有些話想對妳說",
+  "hook": "greet-hook",
+  "auto_greet_text": "開工"
 }
