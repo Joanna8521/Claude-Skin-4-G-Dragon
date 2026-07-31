@@ -296,6 +296,34 @@ def _source_size(src: Path) -> tuple:
     return w, h
 
 
+def _clean_project_copies() -> int:
+    """把 hook 放進各專案 .claude/ 的照片副本收回來。
+
+    桌面 app 只渲染工作目錄底下的圖，所以每個專案都得放一份，
+    projects.txt 記著放過哪些，這裡照著清。
+    """
+    listing = RENDER_DIR / "projects.txt"
+    if not listing.exists():
+        return 0
+    count = 0
+    for line in listing.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        photo = Path(line) / ".claude" / "claude-skin.jpg"
+        try:
+            if photo.exists():
+                photo.unlink()
+                count += 1
+        except OSError:
+            pass
+    try:
+        listing.unlink()
+    except OSError:
+        pass
+    return count
+
+
 def cmd_restore() -> None:
     state = read_json(STATE, {})
     if not state.get("skin"):
@@ -330,10 +358,15 @@ def cmd_restore() -> None:
     if installed and Path(installed).exists():
         Path(installed).unlink()
 
-    # 移掉渲染用的照片副本
+    # 移掉主副本
     render_copy = RENDER_DIR / f"{state['skin']}.jpg"
     if render_copy.exists():
         render_copy.unlink()
+
+    # 移掉散在各專案 .claude/ 底下的副本
+    cleaned = _clean_project_copies()
+    if cleaned:
+        print(f"  清掉 {cleaned} 個專案裡的照片副本")
 
     skin = state["skin"]
     write_json(STATE, {})

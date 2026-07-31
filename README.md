@@ -188,11 +188,16 @@ The docs describe `systemMessage` as a "warning message shown to the user." Test
 
 **So the only channel that reliably renders for the user is Claude's own reply.** That's why this hook prints nothing and asks Claude to do the printing instead. It turned out better anyway — a reply can show a real image, not terminal color blocks.
 
-### 2b. Markdown images only resolve relative to the working directory
+### 2b. Markdown images must live inside the working directory
 
-`![](/absolute/path.jpg)` renders as a blue autolink, not an image. Same for `file://` URLs and for absolute paths wrapped in `<>` to escape spaces. Only a path relative to the session's working directory renders.
+Two rules, both found by testing:
 
-That's why `claude-skin photo` keeps a second copy at `~/.claude/claude-skin/<skin>.jpg` and the hook computes the relative path from the session `cwd` at runtime. Every such path is made of `..` segments plus space-free names, so it never needs escaping no matter where your project lives.
+1. `![](/absolute/path.jpg)` renders as a blue autolink, not an image. Same for `file://` URLs, and for absolute paths wrapped in `<>` to escape spaces.
+2. A relative path works — but only if it resolves to somewhere **under** the working directory. Escaping upward with `../` fails the same way.
+
+So a single shared copy in your home directory can't work. The hook copies the photo into `<project>/.claude/claude-skin.jpg` at session start and references it as `.claude/claude-skin.jpg`. Hidden directories render fine.
+
+This means **the greeting works in every project**, not just this one — you don't have to set anything up per project. The tradeoff is a 21 KB file in each project you open a conversation in. The hook also appends `claude-skin.jpg` to `<project>/.claude/.gitignore` so it can't be committed by accident, records every directory it touched, and `claude-skin restore` deletes them all.
 
 ### 3. Full-window backgrounds are blocked by design
 
@@ -232,7 +237,9 @@ The greeting appears at the **top of the conversation**, not on the app's home s
 ~/.claude/settings.json.pre-skin-<stamp>    full backup before first apply
 ~/.claude/output-styles/<skin>.md           only with --with-persona
 ~/.claude/claude-skin-state.json            records prior state for restore
-~/.claude/claude-skin/<skin>.jpg            render copy of your photo (space-free path)
+~/.claude/claude-skin/<skin>.jpg            master copy of your photo
+~/.claude/claude-skin/projects.txt          projects that received a copy
+<project>/.claude/claude-skin.jpg           per-project copy (auto-gitignored)
 ```
 
 `restore` removes only what this tool added. Your own settings are left alone and the backup is kept.

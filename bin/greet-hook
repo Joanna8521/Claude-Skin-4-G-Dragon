@@ -10,8 +10,8 @@
 """
 
 import json
-import os
 import random
+import shutil
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -19,6 +19,8 @@ from pathlib import Path
 FALLBACK = "今天也要加油喔！不要太累了呦～～～歐巴會心疼的呢！"
 # 渲染用的照片副本。放這裡是因為路徑沒有空白，算相對路徑時不用跳脫。
 RENDER_DIR = Path.home() / ".claude" / "claude-skin"
+# 放過副本的專案清單，restore 靠它清乾淨
+PROJECTS = RENDER_DIR / "projects.txt"
 
 
 def load_meta(skin: Path) -> dict:
@@ -68,19 +70,59 @@ def pick_message(skin: Path) -> tuple:
 
 
 def photo_ref(skin_name: str, cwd: Path) -> str:
-    """算出 markdown 用得到的圖片路徑。
+    """把照片同步進這個專案，回傳 markdown 用的相對路徑。
 
-    桌面 app 只吃「相對於 session 工作目錄」的路徑，絕對路徑會被當成
-    autolink 顯示成一串藍字。所以渲染用的副本放在 ~/.claude/claude-skin/，
-    從任何目錄算過去中間都只有 ..，不會出現空白，省掉跳脫問題。
+    桌面 app 的圖片路徑有兩條規則（都是實測出來的）：
+      1. 絕對路徑、file:// 都不渲染，只會變成一條藍色 autolink
+      2. 相對路徑也必須落在工作目錄「底下」，用 ../ 跳出去一樣不渲染
+
+    所以沒辦法共用一份放在家目錄的圖，只能在每個專案裡放一份副本。
+    隱藏目錄可以（實測 .claude/ 底下正常渲染），所以放 .claude/，
+    順便寫一條 .gitignore 免得被誤 commit 進使用者的專案。
     """
-    render_copy = RENDER_DIR / f"{skin_name}.jpg"
-    if not render_copy.exists():
+    master = RENDER_DIR / f"{skin_name}.jpg"
+    if not master.exists():
         return ""
+
+    dest_dir = cwd / ".claude"
+    dest = dest_dir / "claude-skin.jpg"
     try:
-        return os.path.relpath(render_copy, cwd)
-    except ValueError:          # 跨磁碟區算不出相對路徑
-        return str(render_copy)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        if not dest.exists() or dest.stat().st_size != master.stat().st_size:
+            shutil.copy2(master, dest)
+            _remember_project(cwd)
+        _ensure_gitignore(dest_dir)
+    except OSError:
+        return ""                     # 目錄不能寫就放棄圖片，文字照樣出
+
+    return ".claude/claude-skin.jpg"
+
+
+def _ensure_gitignore(claude_dir: Path) -> None:
+    """在專案的 .claude/.gitignore 補一條，避免照片被 commit 進去。"""
+    gi = claude_dir / ".gitignore"
+    entry = "claude-skin.jpg"
+    try:
+        existing = gi.read_text(encoding="utf-8") if gi.exists() else ""
+        if entry not in existing.split():
+            with gi.open("a", encoding="utf-8") as f:
+                if existing and not existing.endswith("\n"):
+                    f.write("\n")
+                f.write(f"{entry}\n")
+    except OSError:
+        pass
+
+
+def _remember_project(cwd: Path) -> None:
+    """記下放過副本的專案，restore 時才清得掉。"""
+    try:
+        PROJECTS.parent.mkdir(parents=True, exist_ok=True)
+        seen = PROJECTS.read_text(encoding="utf-8").splitlines() if PROJECTS.exists() else []
+        if str(cwd) not in seen:
+            with PROJECTS.open("a", encoding="utf-8") as f:
+                f.write(f"{cwd}\n")
+    except OSError:
+        pass
 
 
 def main() -> None:

@@ -15,3 +15,6 @@ assets/
 
 .DS_Store
 __pycache__/
+
+# hook 同步進來的照片副本
+.claude/claude-skin.jpg
