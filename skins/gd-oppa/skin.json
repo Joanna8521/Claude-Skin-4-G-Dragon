@@ -5,8 +5,8 @@
   "author": "Joanna",
   "version": "1.0.0",
   "persona": "persona.md",
-  "banner": "banner.sh",
   "greetings": "greetings.txt",
-  "accent256": 204,
-  "dim256": 138
+  "custom_label": "今天想對親愛的妳說的話",
+  "random_label": "歐巴今天想說",
+  "hook": "greet-hook"
 }

@@ -1,7 +1,9 @@
 # 個人素材，不進 repo
 # photo.ansi 是使用者自己那張照片的衍生物，多半有版權，別散布
 skins/*/photo.ansi
+skins/*/photo.jpg
 skins/*/today.txt
+assets/
 
 # 來源圖檔
 *.avif

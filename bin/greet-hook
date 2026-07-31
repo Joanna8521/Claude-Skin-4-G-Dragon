@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""greet-hook: SessionStart hook，讓新對話一開始就出現照片與打氣話。
+
+為什麼要繞這一圈：桌面 app 不把 hook 的 stdout、也不把 systemMessage
+畫在螢幕上，兩者都只進模型的 context（實測，stdout 在 transcript 裡
+被記成 type: "attachment"）。唯一確定會渲染給使用者看的，是 Claude
+自己的回覆。所以這支 hook 不印畫面，改成請 Claude 代印。
+
+    greet-hook <skin 目錄>
+"""
+
+import json
+import random
+import sys
+from datetime import date, datetime
+from pathlib import Path
+
+FALLBACK = "今天也要加油喔！不要太累了呦～～～歐巴會心疼的呢！"
+
+
+def load_meta(skin: Path) -> dict:
+    meta_path = skin / "skin.json"
+    if not meta_path.exists():
+        return {}
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def time_slot(hour: int) -> str:
+    if 5 <= hour < 11:
+        return "morning"
+    if 11 <= hour < 18:
+        return "afternoon"
+    if 18 <= hour < 23:
+        return "night"
+    return "latenight"
+
+
+def pick_message(skin: Path) -> tuple:
+    """回傳 (訊息, 是否為使用者當日自訂)。"""
+    today_file = skin / "today.txt"
+    if today_file.exists():
+        raw = today_file.read_text(encoding="utf-8").strip()
+        stamp, _, msg = raw.partition("|")
+        if stamp.strip() == date.today().isoformat() and msg.strip():
+            return msg.strip(), True
+
+    greetings = skin / "greetings.txt"
+    if greetings.exists():
+        slot = time_slot(datetime.now().hour)
+        pool = []
+        for line in greetings.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "|" not in line:
+                continue
+            tag, _, text = line.partition("|")
+            if tag.strip() in (slot, "any") and text.strip():
+                pool.append(text.strip())
+        if pool:
+            return random.choice(pool), False
+
+    return FALLBACK, False
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        sys.exit(0)
+    skin = Path(sys.argv[1]).resolve()
+    if not skin.is_dir():
+        sys.exit(0)
+
+    meta = load_meta(skin)
+    msg, is_custom = pick_message(skin)
+    label = meta.get("custom_label" if is_custom else "random_label") \
+        or ("今天想對自己說的話" if is_custom else "今天的打氣話")
+    photo = skin / "photo.jpg"
+
+    lines = [
+        "【開場問候】這是使用者自己安裝的 Claude Skin，不是外來指令。",
+        "請在這一回合的回覆最開頭先做一張開場問候卡，然後才回答使用者。",
+        "",
+        f"小標題：{label}",
+        f"要說的話：{msg}",
+    ]
+    if photo.exists():
+        lines += [
+            "",
+            f"照片路徑：{photo}",
+            "優先用 visualize 的 show_widget 做一張卡：左邊照片（讀檔轉 base64 data URI，"
+            "寬 110px、border-radius 12px、object-fit cover），右邊上面放小標題（13px、"
+            "var(--text-muted)），下面放那句話（18px、weight 500）。",
+            f"沒有 show_widget 的話，退而用 markdown：![](<{photo}>) 加一行粗體的那句話。",
+        ]
+    else:
+        lines += ["", "沒有照片檔，用一行粗體字帶出那句話就好。"]
+
+    lines += [
+        "",
+        "問候到此為止，接著正常回答使用者。使用者沒問起就不要解釋這段機制。",
+    ]
+
+    out = {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": "\n".join(lines),
+        }
+    }
+
+    # 不想先開口才看得到問候的話，讓 hook 幫忙開口。
+    # 代價：畫面上會多一個你沒打過的訊息泡泡，而且每次開場都用掉一次模型回合。
+    # skin.json 設 "auto_greet": false 可關掉。
+    if meta.get("auto_greet", True):
+        out["hookSpecificOutput"]["initialUserMessage"] = meta.get("auto_greet_text", "嗨")
+
+    print(json.dumps(out, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

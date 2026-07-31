@@ -4,15 +4,16 @@
 用法：
   claude-skin list              列出可用 skin
   claude-skin current           顯示目前套用的 skin
-  claude-skin preview <name>    直接跑一次開場畫面（不改任何設定）
-  claude-skin apply <name>      套用 skin（只換開場畫面，不動語氣）
+  claude-skin preview <name>    看會送給 Claude 的開場指示（不改任何設定）
+  claude-skin apply <name>      套用 skin（只換開場，不動語氣）
   claude-skin apply <name> --with-persona
                                 連 Claude 的講話語氣一起換（可選）
   claude-skin restore           還原成套用前的設定
 
-  claude-skin say <文字>        設定今天想對自己說的話（只當天有效）
+  claude-skin say <文字>        設定今天想說的話（隨時可改，只當天有效）
   claude-skin say --clear       清掉，改回隨機招呼語
-  claude-skin photo <圖片路徑>  換掉開場照片（自動轉成終端機色塊）
+  claude-skin photo <圖> [-c WxH+X+Y]
+                                換掉開場照片，-c 可先裁切
 
 會動到的檔案：
   ~/.claude/settings.json                加 hooks.SessionStart（--with-persona 才動 outputStyle）
@@ -35,6 +36,7 @@ CLAUDE_DIR = Path.home() / ".claude"
 SETTINGS = CLAUDE_DIR / "settings.json"
 STYLES_DIR = CLAUDE_DIR / "output-styles"
 STATE = CLAUDE_DIR / "claude-skin-state.json"
+HOOK = REPO / "bin" / "greet-hook"
 
 # 我們插入的 hook 一律指向這個 repo 的 skins/，restore 時據此辨識
 HOOK_MARKER = str(SKINS_DIR)
@@ -121,20 +123,22 @@ def cmd_current() -> None:
 
 
 def cmd_preview(name: str) -> None:
+    """開場畫面是 Claude 畫的，這裡只能預覽會送給它的內容。"""
     meta = load_skin(name)
-    banner = meta["_dir"] / meta.get("banner", "banner.sh")
-    if not banner.exists():
-        die(f"skin 缺少開場檔 {banner}")
-    env = dict(os.environ, CLAUDE_SKIN_COLOR=os.environ.get("CLAUDE_SKIN_COLOR", "1"))
-    r = subprocess.run(["bash", str(banner)], env=env)
-    sys.exit(r.returncode)
+    r = subprocess.run([sys.executable, str(HOOK), str(meta["_dir"])],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip():
+        die("預覽失敗")
+    out = json.loads(r.stdout)["hookSpecificOutput"]
+    print(out["additionalContext"])
+    if "initialUserMessage" in out:
+        print()
+        print(f"（會自動代打第一句：「{out['initialUserMessage']}」，"
+              f"所以不用先開口也看得到問候）")
 
 
 def cmd_apply(name: str, with_persona: bool = False) -> None:
     meta = load_skin(name)
-    banner = meta["_dir"] / meta.get("banner", "banner.sh")
-    if not banner.exists():
-        die(f"skin 缺少開場檔 {banner}")
 
     settings = read_json(SETTINGS, {})
 
@@ -170,7 +174,7 @@ def cmd_apply(name: str, with_persona: bool = False) -> None:
     # 所以拆成兩條而不是寫 "startup|clear"，確保兩種情況都觸發。
     hook_entry = {
         "type": "command",
-        "command": f'bash "{banner}"',
+        "command": f'python3 "{HOOK}" "{meta["_dir"]}"',
         "statusMessage": f"{meta.get('title', name)} 上線中...",
     }
     for matcher in ("startup", "clear"):
@@ -188,7 +192,7 @@ def cmd_apply(name: str, with_persona: bool = False) -> None:
     write_json(STATE, state)
 
     print(f"✓ 已套用 {meta.get('title', name)}")
-    print(f"  SessionStart hook → {banner}")
+    print(f"  SessionStart hook → {HOOK}")
     if style_name:
         print(f"  outputStyle → {style_name}")
     else:
@@ -237,27 +241,52 @@ def cmd_say(words: list) -> None:
     print("  只有今天有效，明天會自動換回隨機招呼語。")
 
 
-def cmd_photo(image: str, width: int, crop: str) -> None:
+def cmd_photo(image: str, crop: str) -> None:
     skin = _active_skin_dir()
     src = Path(image).expanduser()
     if not src.exists():
         die(f"找不到圖片 {src}")
 
-    cmd = [sys.executable, str(REPO / "bin" / "photo2ansi"), str(src),
-           "-w", str(width), "-o", str(skin / "photo.ansi"), "--indent", "  "]
+    # 1) photo.jpg：桌面 app 的開場問候卡用，是原圖不是色塊
+    jpg_cmd = ["sips", "-Z", "420", "-s", "format", "jpeg",
+               "-s", "formatOptions", "80", str(src), "--out", str(skin / "photo.jpg")]
     if crop:
-        cmd += ["-c", crop]
+        cw, ch, cx, cy = _parse_crop(crop)
+        sw, sh = _source_size(src)
+        jpg_cmd = ["sips", "-c", str(ch), str(cw),
+                   "--cropOffset", str((cy + ch // 2) - sh // 2), str((cx + cw // 2) - sw // 2),
+                   "-Z", "420", "-s", "format", "jpeg", "-s", "formatOptions", "80",
+                   str(src), "--out", str(skin / "photo.jpg")]
+    if subprocess.run(jpg_cmd, capture_output=True).returncode != 0:
+        die("產生 photo.jpg 失敗")
 
-    if subprocess.run(cmd).returncode != 0:
-        die("轉檔失敗")
-
+    print(f"✓ 照片已換成 {src.name}")
     if not crop:
-        print()
-        print("提醒：全身照縮到這個尺寸，臉大概只剩十幾個像素，會糊成一片。")
-        print("     裁到臉再試一次會差很多：claude-skin photo <圖> -c WxH+X+Y")
+        print("  沒裁切的話會用整張圖。想只留臉：claude-skin photo <圖> -c WxH+X+Y")
     print()
-    print("開新 session 或 /clear 就會看到。想先看效果：")
-    print(f"  bash \"{skin / 'banner.sh'}\"")
+    print("開新對話就會看到。")
+
+
+def _parse_crop(spec: str) -> tuple:
+    import re
+    m = re.fullmatch(r"(\d+)x(\d+)\+(\d+)\+(\d+)", spec.strip())
+    if not m:
+        die("裁切格式要寫成 WxH+X+Y，例如 400x400+240+129")
+    return tuple(int(g) for g in m.groups())
+
+
+def _source_size(src: Path) -> tuple:
+    r = subprocess.run(["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(src)],
+                       capture_output=True, text=True)
+    w = h = None
+    for line in r.stdout.splitlines():
+        if "pixelWidth:" in line:
+            w = int(line.split(":")[1])
+        elif "pixelHeight:" in line:
+            h = int(line.split(":")[1])
+    if not w or not h:
+        die("讀不到圖片尺寸")
+    return w, h
 
 
 def cmd_restore() -> None:
@@ -328,11 +357,10 @@ def main() -> None:
     elif cmd == "photo":
         ap = argparse.ArgumentParser(prog="claude-skin photo")
         ap.add_argument("image")
-        ap.add_argument("-w", "--width", type=int, default=52)
         ap.add_argument("-c", "--crop", metavar="WxH+X+Y",
                         help="先裁切再縮圖，X/Y 是左上角座標")
         opts = ap.parse_args(rest)
-        cmd_photo(opts.image, opts.width, opts.crop)
+        cmd_photo(opts.image, opts.crop)
     elif cmd == "restore":
         cmd_restore()
     else:

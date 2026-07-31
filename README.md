@@ -1,21 +1,12 @@
 # Claude Skin
 
-新對話一開始，你的照片和今天想對自己說的話會出現在最上面。
+開新對話時，你的照片和今天想對自己說的話會出現在最上面。
 
-```
-  ┌─────────────┐
-  │             │   今天想對自己說的話
-  │   你的照片   │
-  │  （色塊）    │   今天只要把這件事做完就贏了
-  │             │
-  └─────────────┘
-```
+不用先打招呼，一開就有。
 
-左邊是照片轉成的終端機色塊，右邊是招呼語。一行指令切換，一行指令還原。
-
-> **English**: A skin system for Claude Code. Renders your own photo as truecolor
-> terminal blocks plus a daily message at the top of every new session, via the
-> `SessionStart` hook. macOS only (uses built-in `sips`). No dependencies.
+> **English**: Shows your own photo and a personal daily message at the top of
+> every new Claude Code conversation, via the `SessionStart` hook. macOS only
+> (uses built-in `sips`). Zero dependencies.
 > **The CLI and docs are in Traditional Chinese.**
 
 ---
@@ -28,61 +19,50 @@ cd Claude-Skin-4-G-Dragon
 ./install.sh
 ```
 
-零依賴。縮圖交給 macOS 內建的 `sips`，BMP 解碼和色塊渲染都是 Python 標準庫，不用 `pip install` 也不用 `brew install`。
+零依賴，不用 `pip install` 也不用 `brew install`。
 
 **repo 沒有附照片**，放你自己的：
 
 ```bash
-claude-skin photo ~/Downloads/你的圖.jpg -c 400x400+240+129
+claude-skin photo ~/Downloads/你的圖.jpg
 ```
 
-開新對話或 `/clear` 就會看到。
+開一個新對話就會看到。
 
-## 照片要裁到臉，這是重點
+## 兩件事怎麼設定
 
-終端機一個字元格只能塞兩個像素。52 字元寬的圖，實際解析度就是 52×52。
-
-全身照直接丟進去，臉大概只剩十幾個像素，會糊成一團馬賽克。**裁到臉再轉，差別非常大。**
+### 照片
 
 ```bash
-claude-skin photo <圖> -c WxH+X+Y
+claude-skin photo <圖片路徑>
 ```
 
-`X`、`Y` 是裁切框左上角在原圖的座標。用預覽程式或任何看得到座標的工具量一下就好。
+換一次就換好，之後每個新對話都用這張。avif、heic、jpg、png 都吃（走 macOS 內建的 `sips`）。
 
-尺寸怎麼挑：
-
-| 寬度 | 行高 | 適合 |
-|---|---|---|
-| 36 | 18 | 最省畫面，只看得出輪廓和配色 |
-| **52** | **26** | **預設。認得出五官** |
-| 72 | 36 | 最清楚，但會吃掉大半個畫面 |
+全身照想只留臉：
 
 ```bash
-claude-skin photo <圖> -w 72 -c 400x400+240+129
+claude-skin photo <圖> -c 400x400+240+129
 ```
 
-## 指令
+`-c` 是 `寬x高+左上角X+左上角Y`，單位是原圖像素。不加就用整張。
+
+### 打氣話
 
 ```bash
-claude-skin list                  # 列出所有 skin
-claude-skin apply <name>          # 套用
-claude-skin current               # 看目前套哪個
-claude-skin restore               # 還原成套用前的樣子
-
-claude-skin say "今天的話"         # 設定今天想對自己說的話
-claude-skin say                   # 看今天設了什麼
-claude-skin say --clear           # 清掉，改回隨機招呼語
-claude-skin photo <圖> [-w] [-c]  # 換照片
+claude-skin say "今天只要把這件事做完就贏了"
 ```
 
-`apply` 和 `restore` 要開新 session 或 `/clear` 才生效。`say` 和改 `greetings.txt` 是即時的。
+**想改就改，隨時。** 一天要改十次也可以，後面蓋掉前面。改完下一個新對話就生效。
 
-### 每天的話
+設的話帶日期戳記，**只有當天有效**，隔天自動失效換回隨機招呼語。所以不是「每天一定要設」，是「設了就今天有效，不設就用預設的」。
 
-`claude-skin say` 設的話**只有當天有效**，隔天自動換回隨機招呼語。
+```bash
+claude-skin say            # 看今天設了什麼
+claude-skin say --clear    # 清掉，馬上改回隨機
+```
 
-沒設的時候，會依當下時段從 `greetings.txt` 隨機挑：
+沒設的時候，會依當下時段從 `skins/gd-oppa/greetings.txt` 隨機挑一句：
 
 | 時段 | 時間 |
 |---|---|
@@ -92,22 +72,66 @@ claude-skin photo <圖> [-w] [-c]  # 換照片
 | `latenight` | 23:00 – 05:00 |
 | `any` | 任何時候 |
 
-格式是 `時段|句子`，`#` 開頭是註解。改完存檔立刻生效。
+想要**長期**的句子而不是只有今天，直接編 `greetings.txt`，格式 `時段|句子`，`#` 開頭是註解。存檔立刻生效，不用重新 apply。
+
+### 小標題
+
+照片旁邊那行小字（例如「今天想對親愛的妳說的話」）寫在 `skins/<name>/skin.json`：
+
+```json
+{
+  "custom_label": "今天想對親愛的妳說的話",
+  "random_label": "歐巴今天想說"
+}
+```
+
+`custom_label` 用在你自己 `say` 的句子，`random_label` 用在隨機抽的。
+
+## 要不要自動幫你開口
+
+問候是 Claude 「回覆」出來的，所以正常情況要你先講一句話它才會回。
+
+預設會用 `initialUserMessage` 幫你代打一句「嗨」，這樣一開新對話就直接看到問候。代價是畫面上會多一個你沒打過的訊息泡泡，而且每次開場都用掉一次模型回合。
+
+不想要的話，在 `skin.json` 加：
+
+```json
+{ "auto_greet": false }
+```
+
+改代打的內容：
+
+```json
+{ "auto_greet_text": "早安" }
+```
+
+## 指令
+
+```bash
+claude-skin list              # 列出所有 skin
+claude-skin apply <name>      # 套用
+claude-skin preview <name>    # 看會送給 Claude 的開場指示
+claude-skin current           # 看目前套哪個
+claude-skin restore           # 還原成套用前的樣子
+
+claude-skin say <文字>        # 今天想說的話
+claude-skin photo <圖> [-c]   # 換照片
+```
+
+`apply` 和 `restore` 要開新對話或 `/clear` 才生效。`say`、`photo`、改 `greetings.txt` 都是即時的。
 
 ## 一個 skin 有什麼
 
 ```
 skins/<name>/
-├── skin.json        # 名稱、描述
-├── banner.sh        # SessionStart hook 進入點
+├── skin.json        # 名稱、小標題、auto_greet 設定
 ├── greetings.txt    # 招呼語庫
-├── art.txt          # 沒照片時的字元畫
-├── photo.ansi       # 照片色塊（gitignore，本機才有）
+├── photo.jpg        # 你的照片（gitignore，本機才有）
 ├── today.txt        # 今天的話（gitignore）
 └── persona.md       # 人格（可選）
 ```
 
-要自己做一個，複製一份改名就好，`skin.json` 的 `name` 要和資料夾同名。
+複製一份改名就是新 skin，`skin.json` 的 `name` 要和資料夾同名。
 
 ## 可選：連語氣一起換
 
@@ -115,15 +139,31 @@ skins/<name>/
 claude-skin apply <name> --with-persona
 ```
 
-會把 `persona.md` 裝成 Claude Code 的 output style，改變 Claude 的講話方式。**預設不加**，不加就完全不碰 `outputStyle`。
+會把 `persona.md` 裝成 Claude Code 的 output style。**預設不加**，不加就完全不碰 `outputStyle`。
 
 `persona.md` 裡寫死一條線：測試掛了就說掛了、沒做完就說沒做完、不確定就說不確定。壞消息可以用可愛的語氣講，但不准為了哄人而修飾內容。
 
 一個會說「差不多好了呦～」但其實測試全紅的 AI，比沒有人格的 AI 危險得多。要自己寫人格檔請保留這段。
 
-## 為什麼是開場畫面，不是滿版底圖
+## 桌面 app 的三個發現
 
-[Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 的做法是用本機 CDP 連進 Codex 桌面 app，注入 CSS 把整個視窗換成一張圖。**這條路在 Claude 上是封死的。**
+做這個東西的過程中實測出三件文件沒寫、或跟文件不一致的事。留在這裡給後來的人省時間。
+
+### 1. hook 的 stdout 不會顯示給使用者
+
+官方文件說 SessionStart 的 stdout「is shown to the user and injected into Claude's context」。
+
+**在桌面 app，只有後半句成立。** stdout 在 transcript 裡被記成 `type: "attachment"`，只餵給模型，不畫在螢幕上。所以 hook 印再漂亮的 ASCII art，使用者也看不到，只有 Claude「看得到」。
+
+### 2. `systemMessage` 也不顯示
+
+文件說 `systemMessage` 是「warning message shown to the user」。實測在桌面 app 的新對話裡，同樣沒有出現在畫面上。
+
+**結論：唯一確定會渲染給使用者看的，是 Claude 自己的回覆。** 所以本專案的 hook 不印畫面，改用 `additionalContext` 請 Claude 代印。這也剛好比較好看，因為 Claude 的回覆能顯示真正的圖片，不是終端機色塊。
+
+### 3. 滿版底圖這條路被官方擋死
+
+[Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 用本機 CDP 連進 Codex 桌面 app 注入 CSS，把整個視窗換成一張圖。這在 Claude 上做不到。
 
 Claude.app（Electron 42.7.0）的 main process 有一段啟動參數守衛：
 
@@ -136,23 +176,21 @@ A.some(g => {
 
 實測用 `--remote-debugging-port=9223` 啟動（獨立 `--user-data-dir`），程序立刻結束、exit 0、無視窗、port 無監聽。
 
-這是刻意的安全控制，理由很硬：CDP 一開，任何本機程序都能讀你的 session token、對話內容、MCP 憑證。Codex 沒擋所以 Dream Skin 能用，Claude 擋了。
+這是刻意的安全控制：CDP 一開，任何本機程序都能讀你的 session token、對話內容、MCP 憑證。Codex 沒擋所以 Dream Skin 能用，Claude 擋了。
 
-繞過去唯一的辦法是改 `app.asar` 或重簽 binary，那會破壞 code signature、每次更新被覆蓋、而且把帳號憑證暴露給整台機器。**本專案不做這件事**，改走官方支援的 `SessionStart` hook，換來的是升級不會壞、憑證不外洩。
+繞過去只能改 `app.asar` 或重簽 binary，會破壞 code signature、每次更新被覆蓋、還把帳號憑證暴露給整台機器。**本專案不做這件事。**
 
 ## 適用範圍
 
 | 目標 | 支援 |
 |---|---|
 | 桌面 app 的 Code 分頁 | ✅ |
-| 終端機的 `claude` CLI | ✅ |
-| 桌面 app 的首頁（Welcome back 那一頁） | ❌ 那是 app 自己的畫面 |
+| 終端機的 `claude` CLI | ✅ 文字會出現，圖片看終端機支不支援 |
+| 桌面 app 的首頁（Welcome back 那頁） | ❌ 那是 app 自己的畫面 |
 | 桌面 app 的 Chat 分頁 | ❌ 沒有 hook 系統 |
 | 視窗底圖／自訂 CSS | ❌ 見上一節 |
 
-畫面出現的位置是**對話的最上面**，不是 app 首頁。
-
-顏色靠 truecolor ANSI。若你的環境不吃跳脫碼，`CLAUDE_SKIN_COLOR=0` 會退回字元畫，`CLAUDE_SKIN_QUIET=1` 只印一行字。
+問候出現的位置是**對話的最上面**，不是 app 首頁。
 
 ## 動到哪些檔案
 
@@ -167,7 +205,7 @@ A.some(g => {
 
 ## 說明
 
-本專案**不含任何藝人照片**。`photo.ansi` 由使用者自己的圖檔在本機產生，已列入 `.gitignore`。
+本專案**不含任何藝人照片**。`photo.jpg` 是使用者自己放的，已列入 `.gitignore`。
 
 這是粉絲向的個人化工具，與權志龍本人及其經紀公司無關，不代表任何人發言，也不是官方或本人背書的產品。放什麼照片是你自己的事，請自行確認你有使用該圖的權利。
 
