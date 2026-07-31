@@ -5,6 +5,9 @@ skins/*/photo.jpg
 skins/*/today.txt
 assets/
 
+# README 的示範圖是專案作者自己拍的，有權散布，所以放行
+!docs/demo-cat.jpg
+
 # 來源圖檔
 *.avif
 *.jpg

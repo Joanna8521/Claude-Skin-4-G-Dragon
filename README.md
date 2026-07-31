@@ -4,20 +4,19 @@
 
 Your photo and a line of encouragement at the top of every new Claude Code conversation.
 
-```
-list what's already done                ← whatever you actually typed
+---
 
-┌────────────┐
-│            │
-│ your photo │
-│            │
-└────────────┘
-Before you start, a word
+> **list what's already done**　　← whatever you actually typed
 
-You got through today too. That counts for something.
+<img src="docs/demo-cat.jpg" width="180" alt="demo photo">
 
-Here's what's done so far: …          ← then it answers you
-```
+*Before you start, a word*
+
+**Just get Python 2025 pushed today. That's the whole win.**
+
+Here's what's done so far: …　　← then it answers you
+
+---
 
 Queue up several lines and one is picked at random, or pin a specific line for today. Write `{project}` in a line and it's replaced with whatever project you're in.
 
