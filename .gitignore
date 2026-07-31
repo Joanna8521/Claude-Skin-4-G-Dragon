@@ -16,5 +16,6 @@ assets/
 .DS_Store
 __pycache__/
 
-# hook 同步進來的照片副本
-.claude/claude-skin.jpg
+# 這個 repo 本身也是一個專案，hook 會在這裡留下 .claude/claude-skin.jpg
+# 和一條保護它的 .gitignore。那些是執行痕跡，不是專案內容，整個排除。
+.claude/
