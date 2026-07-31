@@ -49,7 +49,7 @@ if [ "$IN_PATH" = "0" ]; then
   echo
   echo "$STEP. 把 $BIN_DST 加進 PATH，然後重開終端機："
   echo
-  echo "     echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+  echo "     echo 'export PATH=\"$BIN_DST:\$PATH\"' >> ~/.zshrc"
   echo
   STEP=$((STEP + 1))
 fi

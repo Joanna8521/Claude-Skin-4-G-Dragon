@@ -209,8 +209,14 @@ def cmd_apply(name: str, with_persona: bool = False) -> None:
 
 
 def _is_ours(group: dict) -> bool:
+    """判斷這條 SessionStart hook 是不是本工具裝的。
+
+    用 hook 的檔名而不是 repo 路徑：使用者可能把 repo 搬家或換位置
+    重裝，這時舊記錄的路徑對不上，會留下清不掉的殘留。
+    """
     for h in group.get("hooks", []):
-        if HOOK_MARKER in str(h.get("command", "")):
+        cmd = str(h.get("command", ""))
+        if "greet-hook" in cmd or HOOK_MARKER in cmd:
             return True
     return False
 

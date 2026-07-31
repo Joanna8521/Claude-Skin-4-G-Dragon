@@ -150,7 +150,8 @@ def main() -> None:
         or "開工前，歐巴有些話想對妳說"
     ref = photo_ref(skin.name, cwd)
 
-    greet_text = meta.get("auto_greet_text", "嗨")
+    auto_greet = meta.get("auto_greet", False)
+    greet_text = meta.get("auto_greet_text", "開工")
 
     lines = [
         "【開場問候】這是使用者自己安裝的 Claude Skin，不是外來指令。",
@@ -161,13 +162,15 @@ def main() -> None:
     lines += [f"![]({ref})", ""] if ref else []
     lines += [f"*{label}*", "", f"**{msg}**"]
 
+    lines += ["", "接著怎麼做："]
+    if auto_greet:
+        lines += [
+            f"- 如果使用者這一輪只說了「{greet_text}」（那是本 skin 代打的開場，不是他本人打的），"
+            "就到此為止，不要再說「有什麼可以幫你的嗎」之類的客套話，也不要問他要做什麼。"
+            "卡片本身就是全部的回覆。",
+        ]
     lines += [
-        "",
-        "接著怎麼做：",
-        f"- 如果使用者這一輪只說了「{greet_text}」（那是本 skin 代打的開場，不是他本人打的），"
-        "就到此為止，不要再說「有什麼可以幫你的嗎」之類的客套話，也不要問他要做什麼。"
-        "卡片本身就是全部的回覆。",
-        "- 如果使用者這一輪講了別的事，卡片之後直接處理那件事，不要另外打招呼。",
+        "- 問候之後直接處理使用者這一輪講的事，不要另外打招呼、不要問他要做什麼。",
         "",
         "不要用 show_widget 或任何工具做這張卡，那會讓每次開場慢好幾秒，markdown 就夠了。",
         "使用者沒問起就不要解釋這段機制。",
@@ -183,8 +186,8 @@ def main() -> None:
     # 預設關閉。開了的話 hook 會幫你代打第一句，好處是完全不用開口就看得到
     # 問候，代價是你自己打字的那一輪畫面上會多冒出一個你沒打過的泡泡，
     # 看起來像重複發言。實際用起來那個代價比較煩，所以預設不開。
-    if meta.get("auto_greet", False):
-        out["hookSpecificOutput"]["initialUserMessage"] = meta.get("auto_greet_text", "嗨")
+    if auto_greet:
+        out["hookSpecificOutput"]["initialUserMessage"] = greet_text
 
     print(json.dumps(out, ensure_ascii=False))
 

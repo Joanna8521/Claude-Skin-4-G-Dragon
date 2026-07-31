@@ -39,7 +39,25 @@ cd Claude-Skin-4-G-Dragon
 ./install.sh
 ```
 
-This symlinks `claude-skin` into `~/.local/bin` and applies the default skin. If that directory isn't on your `PATH`, the installer tells you what to add to `~/.zshrc`.
+That's the whole install. `install.sh` checks your environment, symlinks `claude-skin` into `~/.local/bin`, registers the SessionStart hook in `~/.claude/settings.json`, and prints your next steps.
+
+**Keep the cloned folder.** The hook runs scripts from it, so deleting or moving the repo breaks the greeting. If you do move it, re-run `./install.sh` from the new location — it cleans up the old registration.
+
+To install the command somewhere other than `~/.local/bin`:
+
+```bash
+CLAUDE_SKIN_BIN=/usr/local/bin ./install.sh
+```
+
+If `~/.local/bin` isn't on your `PATH`, the installer prints the exact line to add to `~/.zshrc`.
+
+### Uninstall
+
+```bash
+claude-skin restore
+```
+
+Removes the hook, restores your previous `outputStyle`, and deletes every photo copy it placed in your projects. Your `~/.claude/settings.json` backup is kept. After that you can delete the cloned folder.
 
 ---
 
