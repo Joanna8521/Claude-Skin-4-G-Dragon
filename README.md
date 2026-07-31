@@ -465,4 +465,8 @@ This is a fan-made personalization tool. It is not affiliated with, endorsed by,
 
 ## License
 
-MIT
+The code is MIT. See [LICENSE](LICENSE).
+
+**MIT covers this tool only — not the images you feed it.** Photos you add with `claude-skin photo` stay on your machine and are never committed (they're gitignored). Whatever rights apply to those images are between you and whoever owns them; this project doesn't grant you any.
+
+If you fork this repo and want to ship a demo image in it, make sure you actually hold the rights to distribute that image. A photo you found online usually doesn't qualify, even if it's widely reposted, and even if it looks AI-generated.
