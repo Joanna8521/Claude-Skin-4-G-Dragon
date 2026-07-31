@@ -12,7 +12,7 @@ Your photo and a line of encouragement at the top of every new Claude Code conve
 
 *Before you start, a word*
 
-**Just get Python 2025 pushed today. That's the whole win.**
+**Just get Python 2026 pushed today. That's the whole win.**
 
 Here's what's done so far: …　　← then it answers you
 
@@ -178,7 +178,7 @@ Works in both kinds of lines. It's replaced with the name of the directory you'r
 claude-skin add "Keep pushing {project} today"
 ```
 
-In `Python 2025` that reads "Keep pushing Python 2025 today"; in `Grow4ai` it reads Grow4ai. **Write it once, stays relevant everywhere.**
+In `Python 2026` that reads "Keep pushing Python 2026 today"; in `Grow4ai` it reads Grow4ai. **Write it once, stays relevant everywhere.**
 
 ---
 
