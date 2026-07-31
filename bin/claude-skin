@@ -517,10 +517,18 @@ def cmd_restore() -> None:
     if installed and Path(installed).exists():
         Path(installed).unlink()
 
-    # 移掉主副本
-    render_copy = RENDER_DIR / f"{state['skin']}.jpg"
-    if render_copy.exists():
-        render_copy.unlink()
+    # 移掉照片池，還有舊版的單張檔案
+    pool = RENDER_DIR / state["skin"]
+    if pool.is_dir():
+        for shot in pool.glob("*.jpg"):
+            shot.unlink()
+        try:
+            pool.rmdir()
+        except OSError:
+            pass
+    legacy = RENDER_DIR / f"{state['skin']}.jpg"
+    if legacy.exists():
+        legacy.unlink()
 
     # 移掉散在各專案 .claude/ 底下的副本
     cleaned = _clean_project_copies()
