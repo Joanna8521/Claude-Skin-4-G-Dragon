@@ -180,10 +180,10 @@ def main() -> None:
         }
     }
 
-    # 不想先開口才看得到問候的話，讓 hook 幫忙開口。
-    # 代價：畫面上會多一個你沒打過的訊息泡泡，而且每次開場都用掉一次模型回合。
-    # skin.json 設 "auto_greet": false 可關掉。
-    if meta.get("auto_greet", True):
+    # 預設關閉。開了的話 hook 會幫你代打第一句，好處是完全不用開口就看得到
+    # 問候，代價是你自己打字的那一輪畫面上會多冒出一個你沒打過的泡泡，
+    # 看起來像重複發言。實際用起來那個代價比較煩，所以預設不開。
+    if meta.get("auto_greet", False):
         out["hookSpecificOutput"]["initialUserMessage"] = meta.get("auto_greet_text", "嗨")
 
     print(json.dumps(out, ensure_ascii=False))

@@ -2,9 +2,24 @@
 
 **English** · [繁體中文](README.zh-TW.md)
 
-Your own photo and a personal message, at the top of every new Claude Code conversation.
+Your photo and a line of encouragement at the top of every new Claude Code conversation.
 
-You don't have to say hello first. Open a new conversation and it's there.
+```
+list what's already done                ← whatever you actually typed
+
+┌────────────┐
+│            │
+│ your photo │
+│            │
+└────────────┘
+Before you start, a word
+
+You got through today too. That counts for something.
+
+Here's what's done so far: …          ← then it answers you
+```
+
+Queue up several lines and one is picked at random, or pin a specific line for today. Write `{project}` in a line and it's replaced with whatever project you're in.
 
 ---
 
@@ -26,29 +41,30 @@ cd Claude-Skin-4-G-Dragon
 
 This symlinks `claude-skin` into `~/.local/bin` and applies the default skin. If that directory isn't on your `PATH`, the installer tells you what to add to `~/.zshrc`.
 
-## Getting started
+---
+
+## Three steps to start
 
 ### 1. Add your photo
 
-**This repo ships no photo.** Use your own:
-
-```bash
-claude-skin photo ~/Pictures/me.jpg
-```
-
-Accepts jpg, png, avif, heic, webp.
-
-### 2. Crop it to the part that matters
-
-The greeting card shows a small square. A full-body shot shrinks the face to almost nothing, so crop it:
+**This repo ships no photo.** Start with the crop tool:
 
 ```bash
 claude-skin crop ~/Pictures/me.jpg
 ```
 
-This opens a web page with your photo and a draggable box. Drag to move, pull the pink dot to resize. The page prints the exact command underneath — copy it, paste it back into your terminal, done.
+It writes a web page — open it in a browser. Your photo has a pink box on it: **drag to move, pull the pink dot to resize.** The exact command appears underneath and updates live. Hit copy, paste it into your terminal, and the photo is set.
 
-If you'd rather type coordinates yourself:
+Why cropping matters: the greeting shows a small square. A full-body shot shrinks the face to almost nothing. Cropping to the face makes a large difference.
+
+<details>
+<summary>Skip the browser, use flags instead</summary>
+
+```bash
+claude-skin photo ~/Pictures/me.jpg
+```
+
+Uses the whole image. To specify the crop yourself:
 
 ```bash
 claude-skin photo ~/Pictures/me.jpg -c 400x400+240+129
@@ -56,126 +72,147 @@ claude-skin photo ~/Pictures/me.jpg -c 400x400+240+129
 
 That's `width x height + leftX + topY`, in source-image pixels.
 
-### 3. Set today's message
+Accepts jpg, png, avif, heic, webp.
+</details>
+
+### 2. Add a few lines you'd want to read
 
 ```bash
-claude-skin say "Just ship {project} today"
+claude-skin add "Keep pushing {project} today"
+claude-skin add "Stuck? Get up and walk around, it'll come to you"
+claude-skin add "It's past midnight, go to sleep" -t latenight
 ```
 
-`{project}` is replaced with the name of whatever project you're in, so one line stays relevant everywhere.
+Lines added this way **stay forever**, and one is picked at random each time.
 
-### 4. Open a new conversation
+The default skin ships with lines already, so you can skip this step.
 
-That's it. The photo and message appear at the top.
+### 3. Open a new conversation and say anything
 
-## Daily use
+The greeting appears at the top of Claude's first reply, then it answers whatever you asked.
 
-Two commands cover everything:
+---
+
+## Two kinds of lines
+
+This is the part that's easy to confuse, so up front:
+
+| | Command | Lifetime | When to use it |
+|---|---|---|---|
+| **Random pool** | `claude-skin add` | Permanent | Things you'd like to hear generally |
+| **Today only** | `claude-skin say` | Expires at midnight | A specific goal you want in front of you today |
+
+`say` **overrides** the pool while it's set, and expires automatically at midnight.
+
+### The random pool
 
 ```bash
-claude-skin say "whatever you need to hear today"
-claude-skin photo <image>
+claude-skin add "some line"              # any time of day (default)
+claude-skin add "some line" -t latenight # only after 23:00
+claude-skin lines                        # list the pool, numbered
+claude-skin lines -d 3                   # delete line 3
 ```
 
-**Change the message whenever you want** — ten times a day is fine, each one replaces the last. It takes effect in your next new conversation.
-
-The message is date-stamped and **expires at midnight**. The next day it falls back to a random line from `greetings.txt`. So it's not a daily chore: set one when you want one, skip it and you get the default.
-
-```bash
-claude-skin say            # show today's message
-claude-skin say --clear    # drop it, back to random
-```
-
-### Random lines
-
-With nothing set, a line is picked at random from the pool matching the current time of day:
+Time tags:
 
 | Tag | Hours |
 |---|---|
+| `any` | always eligible (default) |
 | `morning` | 05:00 – 11:00 |
 | `afternoon` | 11:00 – 18:00 |
 | `night` | 18:00 – 23:00 |
 | `latenight` | 23:00 – 05:00 |
-| `any` | always eligible |
 
-You don't have to edit the file:
+You can also edit `skins/<name>/greetings.txt` directly — format is `tag|text`, `#` starts a comment, saves take effect immediately.
+
+### Today only
+
+```bash
+claude-skin say "Just get {project} pushed today"
+claude-skin say            # show what's set for today
+claude-skin say --clear    # drop it, back to the pool
+```
+
+**Change it whenever you want** — ten times a day is fine, each replaces the last, and it applies to your next new conversation.
+
+Skipping it is fine too; you just get the pool. This is not a daily chore.
+
+### The `{project}` placeholder
+
+Works in both kinds of lines. It's replaced with the name of the directory you're working in:
 
 ```bash
 claude-skin add "Keep pushing {project} today"
-claude-skin add "It's past midnight, go to sleep" -t latenight
-claude-skin lines            # list the pool, numbered
-claude-skin lines -d 3       # delete line 3
 ```
 
-Lines added this way **stay forever** and one is picked at random each time. `say` is just for today.
+In `Python 2025` that reads "Keep pushing Python 2025 today"; in `Grow4ai` it reads Grow4ai. **Write it once, stays relevant everywhere.**
 
-Without `-t` the tag is `any`. You can also edit `skins/<name>/greetings.txt` directly — format is `tag|text`, `#` starts a comment, saves take effect immediately.
+---
 
-Lines may contain `{project}`, replaced with the current project name.
+## Tuning it
 
-### The small label
+### The small caption above the line
 
-The caption above the message lives in `skins/<name>/skin.json`:
+Lives in `skins/<name>/skin.json`:
 
 ```json
 {
-  "custom_label": "Today's note to yourself",
+  "custom_label": "Before you start, a word",
   "random_label": "Today's nudge"
 }
 ```
 
-`custom_label` is used for messages you set with `say`; `random_label` for the random ones.
+`custom_label` is used for lines set with `say`, `random_label` for pool lines. Set them differently if you want to tell the two apart.
 
-## Auto-greeting
+### Making it appear without typing anything (off by default)
 
-The greeting is rendered by Claude's reply, so normally you'd have to send a message before it appears.
+The greeting rides along on Claude's reply, so it shows up the moment you send your first message — whatever that message is.
 
-By default the hook uses `initialUserMessage` to send a short opener for you, so the greeting shows up the moment you open a conversation without typing anything.
-
-The cost is a visible message bubble you didn't type — there's no way for Claude to speak first without one. Pick an opener that reads naturally as something you'd say (the default is a single word), and don't reuse a word you often type yourself, or you'll see what looks like a stutter.
-
-Turn it off in `skin.json`:
+If you want it to appear the instant you open a conversation, without typing at all, the hook can send an opener for you:
 
 ```json
-{ "auto_greet": false }
+{ "auto_greet": true, "auto_greet_text": "let's go" }
 ```
 
-Or change what it says:
+**This is off by default, and the reason is worth knowing.** The opener is injected as a user message, so when you do type something yourself, the transcript shows your message *plus* a second bubble you never wrote. It reads like you said the same thing twice. In practice that's more annoying than typing one word, which is why the default is off.
 
-```json
-{ "auto_greet_text": "morning" }
-```
+---
 
-## Commands
+## Command reference
 
 ```bash
 claude-skin list              # available skins
 claude-skin apply <name>      # apply one
-claude-skin preview <name>    # see what gets sent to Claude
 claude-skin current           # which one is active
-claude-skin restore           # undo everything
+claude-skin preview <name>    # see what gets sent to Claude
+claude-skin restore           # undo everything, remove every copy
 
-claude-skin say <text>        # today's message (expires at midnight)
-claude-skin add <text>        # add to the random pool (permanent)
-claude-skin lines             # list / delete pool lines
-claude-skin crop <image>      # visual crop picker
-claude-skin photo <image>     # set the photo
+claude-skin add <text> [-t tag]   # add to the random pool (permanent)
+claude-skin lines                 # list the pool, numbered
+claude-skin lines -d <n>          # delete one
+claude-skin say <text>            # today only (overrides the pool)
+claude-skin say --clear           # drop today's line
+
+claude-skin crop <image>          # visual crop picker
+claude-skin photo <image> [-c]    # set the photo
 ```
 
-`apply` and `restore` need a new conversation or `/clear`. `say`, `photo`, and edits to `greetings.txt` are immediate.
+`apply` and `restore` need a new conversation or `/clear`. Everything else applies to your next new conversation.
+
+---
 
 ## Making your own skin
 
 ```
 skins/<name>/
 ├── skin.json        # name, labels, auto_greet settings
-├── greetings.txt    # random line pool
+├── greetings.txt    # the random pool
 ├── photo.jpg        # your photo (gitignored)
-├── today.txt        # today's message (gitignored)
+├── today.txt        # today's line (gitignored)
 └── persona.md       # optional personality
 ```
 
-Copy a skin directory, rename it, and make `name` in `skin.json` match the folder name.
+Copy a skin directory, rename it, make `name` in `skin.json` match the folder name, then `claude-skin apply <yours>`.
 
 ## Optional: change Claude's tone too
 
@@ -189,9 +226,21 @@ Installs `persona.md` as a Claude Code output style. **Off by default** — with
 
 An AI that says "almost there!" while the tests are all red is more dangerous than one with no personality at all. Keep that section if you write your own.
 
-## Three things about the desktop app
+---
 
-Findings from building this that the docs don't mention, or contradict. Saved here so the next person doesn't lose the same hours.
+## Why it's built this way
+
+Almost every design decision here was forced by a limitation of the Claude Code desktop app. None of it is preference. This section maps each constraint to the shape it forced, because if you're building something similar you will hit the same walls.
+
+| Constraint | What I wanted to build | What it forced |
+|---|---|---|
+| Hook stdout never reaches the screen | The hook prints the greeting itself | Ask Claude to print it instead |
+| `systemMessage` doesn't render either | Use the documented "shown to the user" field | Same — Claude's reply is the only channel |
+| Images resolve only inside the working directory | One shared photo in the home directory | Copy the photo into every project |
+| `initialUserMessage` leaves a visible bubble | Greeting with zero typing | Shipped off by default |
+| CDP is blocked in the main process | Full-window background image, like Codex | Abandoned entirely |
+
+Details below. All of it is from testing, not documentation.
 
 ### 1. Hook stdout is not shown to the user
 
@@ -205,7 +254,7 @@ The docs describe `systemMessage` as a "warning message shown to the user." Test
 
 **So the only channel that reliably renders for the user is Claude's own reply.** That's why this hook prints nothing and asks Claude to do the printing instead. It turned out better anyway — a reply can show a real image, not terminal color blocks.
 
-### 2b. Markdown images must live inside the working directory
+### 3. Markdown images must live inside the working directory
 
 Two rules, both found by testing:
 
@@ -216,7 +265,13 @@ So a single shared copy in your home directory can't work. The hook copies the p
 
 This means **the greeting works in every project**, not just this one — you don't have to set anything up per project. The tradeoff is a 21 KB file in each project you open a conversation in. The hook also appends `claude-skin.jpg` to `<project>/.claude/.gitignore` so it can't be committed by accident, records every directory it touched, and `claude-skin restore` deletes them all.
 
-### 3. Full-window backgrounds are blocked by design
+### 4. `initialUserMessage` is real, but you probably don't want it
+
+SessionStart accepts `initialUserMessage`, which prepends a message as if the user had typed it. It works — Claude replies immediately, so the greeting appears with zero input from you.
+
+The catch is that it's a real user message in the transcript. When you then type something of your own, you see your message and a second bubble you never wrote. It reads like a stutter. Shipped off by default.
+
+### 5. Full-window backgrounds are blocked by design
 
 [Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) attaches to the Codex desktop app over local CDP and injects CSS to replace the whole window with an image. That is not possible on Claude.
 
@@ -235,6 +290,8 @@ This is deliberate. An open CDP port lets any local process read your session to
 
 The only way around it is patching `app.asar` or re-signing the binary — which breaks the code signature, gets overwritten on every update, and exposes your credentials to the whole machine. **This project doesn't do that.**
 
+---
+
 ## Scope
 
 | Target | Supported |
@@ -245,7 +302,7 @@ The only way around it is patching `app.asar` or re-signing the binary — which
 | Desktop app, Chat tab | ❌ no hook system |
 | Window background / custom CSS | ❌ see above |
 
-The greeting appears at the **top of the conversation**, not on the app's home screen.
+The greeting appears at the **top of Claude's reply**, not on the app's home screen.
 
 ## Files touched
 
@@ -259,7 +316,7 @@ The greeting appears at the **top of the conversation**, not on the app's home s
 <project>/.claude/claude-skin.jpg           per-project copy (auto-gitignored)
 ```
 
-`restore` removes only what this tool added. Your own settings are left alone and the backup is kept.
+`claude-skin restore` removes only what this tool added. Your own settings are left alone and the backup is kept.
 
 ## Note
 

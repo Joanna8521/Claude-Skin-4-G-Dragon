@@ -9,5 +9,6 @@
   "custom_label": "開工前，歐巴有些話想對妳說",
   "random_label": "開工前，歐巴有些話想對妳說",
   "hook": "greet-hook",
-  "auto_greet_text": "開工"
+  "auto_greet_text": "開工",
+  "auto_greet": false
 }
