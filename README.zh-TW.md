@@ -100,9 +100,20 @@ claude-skin say --clear    # 清掉，馬上改回隨機
 | `latenight` | 23:00 – 05:00 |
 | `any` | 任何時候都可能抽到 |
 
-句子放在 `skins/<name>/greetings.txt`，格式 `標籤|句子`，`#` 開頭是註解。存檔立刻生效，不用重新 apply。
+管理池子不用編檔案：
 
-想要**長期固定**的句子就編這個檔，`say` 只管今天。
+```bash
+claude-skin add "今天也要把 {project} 好好推進一點喔！"
+claude-skin add "凌晨了啦！先去睡好不好？" -t latenight
+claude-skin lines            # 看池子裡有哪些，附編號
+claude-skin lines -d 3       # 刪掉第 3 句
+```
+
+`add` 加進去的句子會**一直留著**，每次開場隨機抽一句。`say` 只管今天。
+
+不加 `-t` 預設是 `any`，任何時候都可能抽到。也可以直接編 `skins/<name>/greetings.txt`，格式 `標籤|句子`，`#` 開頭是註解，存檔立刻生效。
+
+句子裡可以寫 `{project}`，會換成當下的專案名稱。
 
 ### 照片旁邊的小標題
 
@@ -146,7 +157,9 @@ claude-skin preview <name>    # 看會送給 Claude 的開場指示
 claude-skin current           # 看目前套哪個
 claude-skin restore           # 還原成套用前的樣子
 
-claude-skin say <文字>        # 今天想說的話
+claude-skin say <文字>        # 今天想說的話（只當天有效）
+claude-skin add <文字>        # 加進隨機池（一直留著）
+claude-skin lines             # 看／刪池子裡的句子
 claude-skin crop <圖>         # 視覺化裁切工具
 claude-skin photo <圖>        # 換照片
 ```

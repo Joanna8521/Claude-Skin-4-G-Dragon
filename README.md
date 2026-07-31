@@ -98,9 +98,20 @@ With nothing set, a line is picked at random from the pool matching the current 
 | `latenight` | 23:00 – 05:00 |
 | `any` | always eligible |
 
-Edit `skins/<name>/greetings.txt` to change them. Format is `tag|text`, `#` starts a comment. Saves take effect immediately — no re-apply needed.
+You don't have to edit the file:
 
-Use this for lines you want **permanently**, as opposed to `say` which is just for today.
+```bash
+claude-skin add "Keep pushing {project} today"
+claude-skin add "It's past midnight, go to sleep" -t latenight
+claude-skin lines            # list the pool, numbered
+claude-skin lines -d 3       # delete line 3
+```
+
+Lines added this way **stay forever** and one is picked at random each time. `say` is just for today.
+
+Without `-t` the tag is `any`. You can also edit `skins/<name>/greetings.txt` directly — format is `tag|text`, `#` starts a comment, saves take effect immediately.
+
+Lines may contain `{project}`, replaced with the current project name.
 
 ### The small label
 
@@ -144,7 +155,9 @@ claude-skin preview <name>    # see what gets sent to Claude
 claude-skin current           # which one is active
 claude-skin restore           # undo everything
 
-claude-skin say <text>        # today's message
+claude-skin say <text>        # today's message (expires at midnight)
+claude-skin add <text>        # add to the random pool (permanent)
+claude-skin lines             # list / delete pool lines
 claude-skin crop <image>      # visual crop picker
 claude-skin photo <image>     # set the photo
 ```

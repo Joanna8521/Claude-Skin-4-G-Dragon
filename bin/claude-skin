@@ -12,6 +12,11 @@
 
   claude-skin say <文字>        設定今天想說的話（隨時可改，只當天有效）
   claude-skin say --clear       清掉，改回隨機招呼語
+
+  claude-skin add <文字> [-t 時段]
+                                加一句進隨機池，會一直留著
+  claude-skin lines             看池子裡有哪些句子
+  claude-skin lines -d <編號>   刪掉其中一句
   claude-skin crop <圖>         開一個網頁用拖的決定裁切範圍，產生下面那行指令
   claude-skin photo <圖> [-c WxH+X+Y]
                                 換掉開場照片，-c 可先裁切
@@ -243,6 +248,81 @@ def cmd_say(words: list) -> None:
     print("  只有今天有效，明天會自動換回隨機招呼語。")
 
 
+SLOTS = ("any", "morning", "afternoon", "night", "latenight")
+SLOT_DESC = {
+    "any": "任何時候",
+    "morning": "早上 05-11",
+    "afternoon": "下午 11-18",
+    "night": "晚上 18-23",
+    "latenight": "凌晨 23-05",
+}
+
+
+def cmd_add(words: list, slot: str) -> None:
+    """把句子加進隨機池。跟 say 不同，這裡的句子會一直留著。"""
+    if slot not in SLOTS:
+        die(f"時段要是 {'、'.join(SLOTS)} 其中之一")
+    text = " ".join(words).strip()
+    if not text:
+        die("要給句子內容")
+
+    gfile = _active_skin_dir() / "greetings.txt"
+    existing = gfile.read_text(encoding="utf-8") if gfile.exists() else ""
+    with gfile.open("a", encoding="utf-8") as f:
+        if existing and not existing.endswith("\n"):
+            f.write("\n")
+        f.write(f"{slot}|{text}\n")
+
+    print(f"✓ 已加入（{SLOT_DESC[slot]}）：{text}")
+    print(f"  現在池子裡有 {len(_read_lines(gfile))} 句，開場會隨機抽")
+
+
+def _read_lines(gfile: Path) -> list:
+    """回傳 [(顯示編號, 時段, 句子, 檔案行索引)]。
+
+    顯示編號是連續的 1、2、3，跟檔案行號脫鉤：檔案裡有註解和空行，
+    直接把行號給使用者看很容易誤刪。
+    """
+    if not gfile.exists():
+        return []
+    out = []
+    for idx, raw in enumerate(gfile.read_text(encoding="utf-8").splitlines()):
+        line = raw.strip()
+        if not line or line.startswith("#") or "|" not in line:
+            continue
+        slot, _, text = line.partition("|")
+        if text.strip():
+            out.append((len(out) + 1, slot.strip(), text.strip(), idx))
+    return out
+
+
+def cmd_lines(delete: int) -> None:
+    gfile = _active_skin_dir() / "greetings.txt"
+    entries = _read_lines(gfile)
+
+    if delete is not None:
+        target = next((e for e in entries if e[0] == delete), None)
+        if not target:
+            die(f"沒有第 {delete} 句，先跑 claude-skin lines 看編號")
+        all_lines = gfile.read_text(encoding="utf-8").splitlines()
+        del all_lines[target[3]]
+        gfile.write_text("\n".join(all_lines) + "\n", encoding="utf-8")
+        print(f"✓ 已刪除：{target[2]}")
+        print(f"  池子剩 {len(entries) - 1} 句")
+        return
+
+    if not entries:
+        print("池子是空的。加句子：claude-skin add \"你想說的話\"")
+        return
+
+    print(f"隨機池共 {len(entries)} 句：\n")
+    for num, slot, text, _ in entries:
+        print(f"  {num:>3}  [{slot}] {text}")
+    print()
+    print("加一句：claude-skin add \"句子\" [-t morning|afternoon|night|latenight]")
+    print("刪一句：claude-skin lines -d <編號>")
+
+
 def cmd_photo(image: str, crop: str) -> None:
     skin = _active_skin_dir()
     src = Path(image).expanduser()
@@ -399,6 +479,17 @@ def main() -> None:
         cmd_apply(names[0], with_persona)
     elif cmd == "say":
         cmd_say(rest)
+    elif cmd == "add":
+        ap = argparse.ArgumentParser(prog="claude-skin add")
+        ap.add_argument("words", nargs="+")
+        ap.add_argument("-t", "--slot", default="any", choices=SLOTS)
+        opts = ap.parse_args(rest)
+        cmd_add(opts.words, opts.slot)
+    elif cmd == "lines":
+        ap = argparse.ArgumentParser(prog="claude-skin lines")
+        ap.add_argument("-d", "--delete", type=int)
+        opts = ap.parse_args(rest)
+        cmd_lines(opts.delete)
     elif cmd == "crop":
         if not rest:
             die("crop 要給圖片路徑")
