@@ -87,17 +87,21 @@ def main() -> None:
     if photo.exists():
         lines += [
             "",
-            f"照片路徑：{photo}",
-            "優先用 visualize 的 show_widget 做一張卡：左邊照片（讀檔轉 base64 data URI，"
-            "寬 110px、border-radius 12px、object-fit cover），右邊上面放小標題（13px、"
-            "var(--text-muted)），下面放那句話（18px、weight 500）。",
-            f"沒有 show_widget 的話，退而用 markdown：![](<{photo}>) 加一行粗體的那句話。",
+            "照下面原樣輸出，一字不改，不要加標題也不要加說明：",
+            "",
+            f"![](<{photo}>)",
+            "",
+            f"*{label}*",
+            "",
+            f"**{msg}**",
         ]
     else:
-        lines += ["", "沒有照片檔，用一行粗體字帶出那句話就好。"]
+        lines += ["", f"輸出兩行：*{label}* 換行後 **{msg}**"]
 
     lines += [
         "",
+        "不要用 show_widget 或任何工具做這張卡，那會讓每次開場都慢好幾秒。"
+        "markdown 一行就夠了。",
         "問候到此為止，接著正常回答使用者。使用者沒問起就不要解釋這段機制。",
     ]
 

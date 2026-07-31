@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""crop-guide: 產生一個網頁，讓你用拖的決定裁切範圍，直接複製指令。
+
+    crop-guide <圖片> [-o 輸出.html]
+
+裁切座標本來要自己拿尺量，很痛苦。這支工具把圖嵌進一張網頁，
+上面有一個可以拖、可以縮放的方框，下面即時顯示對應的
+claude-skin photo 指令，複製貼上就好。
+"""
+
+import argparse
+import base64
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def die(msg: str) -> None:
+    print(f"錯誤：{msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def source_size(src: Path) -> tuple:
+    r = subprocess.run(["sips", "-g", "pixelWidth", "-g", "pixelHeight", str(src)],
+                       capture_output=True, text=True)
+    w = h = None
+    for line in r.stdout.splitlines():
+        if "pixelWidth:" in line:
+            w = int(line.split(":")[1])
+        elif "pixelHeight:" in line:
+            h = int(line.split(":")[1])
+    if not w or not h:
+        die("讀不到圖片尺寸")
+    return w, h
+
+
+HTML = """<!doctype html>
+<meta charset="utf-8">
+<title>裁切範圍 - {name}</title>
+<style>
+  body {{ margin:0; background:#161616; color:#e8e8e8;
+         font:14px/1.6 -apple-system,"PingFang TC",system-ui,sans-serif; }}
+  .wrap {{ max-width:720px; margin:0 auto; padding:28px 20px 48px; }}
+  h1 {{ font-size:18px; font-weight:600; margin:0 0 6px; }}
+  .hint {{ color:#8a8a8a; margin:0 0 20px; }}
+  .stage {{ position:relative; display:inline-block; line-height:0;
+            border-radius:8px; overflow:hidden; }}
+  .stage img {{ display:block; max-width:100%; }}
+  .shade {{ position:absolute; inset:0; background:rgba(0,0,0,.6); pointer-events:none; }}
+  #box {{ position:absolute; cursor:grab; border:2px solid #ff5faf;
+          box-shadow:0 0 0 9999px rgba(0,0,0,.6); border-radius:4px; }}
+  #box.drag {{ cursor:grabbing; }}
+  #box::after {{ content:""; position:absolute; right:-7px; bottom:-7px;
+                 width:14px; height:14px; background:#ff5faf; border-radius:50%;
+                 cursor:nwse-resize; }}
+  .out {{ margin-top:22px; background:#0d0d0d; border:1px solid #2e2e2e;
+          border-radius:8px; padding:14px 16px; }}
+  .out code {{ font:13px/1.6 "SF Mono",Menlo,monospace; color:#7fd6a8;
+               word-break:break-all; display:block; }}
+  button {{ margin-top:12px; background:#ff5faf; color:#160b12; border:0;
+            border-radius:6px; padding:8px 16px; font-size:13px;
+            font-weight:600; cursor:pointer; }}
+  button:active {{ transform:scale(.98); }}
+  .meta {{ color:#7a7a7a; font-size:12px; margin-top:10px; }}
+</style>
+<div class="wrap">
+  <h1>拖出你要的範圍</h1>
+  <p class="hint">拖方框移動，拉右下角粉紅點改大小。下面的指令會跟著變。</p>
+  <div class="stage" id="stage">
+    <img id="img" src="data:image/{fmt};base64,{b64}" alt="">
+    <div id="box"></div>
+  </div>
+  <div class="out">
+    <code id="cmd"></code>
+    <button id="copy">複製指令</button>
+    <div class="meta" id="meta"></div>
+  </div>
+</div>
+<script>
+const SRC_W = {sw}, SRC_H = {sh};
+const img = document.getElementById('img');
+const box = document.getElementById('box');
+const cmd = document.getElementById('cmd');
+const meta = document.getElementById('meta');
+let side, x, y, scale;
+
+function init() {{
+  scale = img.clientWidth / SRC_W;
+  side = Math.round(Math.min(img.clientWidth, img.clientHeight) * 0.6);
+  x = Math.round((img.clientWidth - side) / 2);
+  y = Math.round((img.clientHeight - side) / 4);
+  draw();
+}}
+
+function clamp() {{
+  side = Math.max(40, Math.min(side, img.clientWidth, img.clientHeight));
+  x = Math.max(0, Math.min(x, img.clientWidth - side));
+  y = Math.max(0, Math.min(y, img.clientHeight - side));
+}}
+
+function draw() {{
+  clamp();
+  box.style.left = x + 'px'; box.style.top = y + 'px';
+  box.style.width = side + 'px'; box.style.height = side + 'px';
+  const S = Math.round(side / scale), X = Math.round(x / scale), Y = Math.round(y / scale);
+  cmd.textContent = `claude-skin photo "${{IMG_PATH}}" -c ${{S}}x${{S}}+${{X}}+${{Y}}`;
+  meta.textContent = `原圖 ${{SRC_W}}×${{SRC_H}}，裁切 ${{S}}×${{S}} 起點 (${{X}}, ${{Y}})`;
+}}
+
+const IMG_PATH = {path!r};
+
+let mode = null, sx = 0, sy = 0, ox = 0, oy = 0, oside = 0;
+box.addEventListener('pointerdown', e => {{
+  const r = box.getBoundingClientRect();
+  mode = (e.clientX > r.right - 18 && e.clientY > r.bottom - 18) ? 'size' : 'move';
+  sx = e.clientX; sy = e.clientY; ox = x; oy = y; oside = side;
+  box.classList.add('drag'); box.setPointerCapture(e.pointerId);
+  e.preventDefault();
+}});
+box.addEventListener('pointermove', e => {{
+  if (!mode) return;
+  const dx = e.clientX - sx, dy = e.clientY - sy;
+  if (mode === 'move') {{ x = ox + dx; y = oy + dy; }}
+  else {{ side = oside + Math.max(dx, dy); }}
+  draw();
+}});
+box.addEventListener('pointerup', e => {{
+  mode = null; box.classList.remove('drag'); box.releasePointerCapture(e.pointerId);
+}});
+
+document.getElementById('copy').onclick = () => {{
+  navigator.clipboard.writeText(cmd.textContent);
+  const b = document.getElementById('copy');
+  b.textContent = '已複製'; setTimeout(() => b.textContent = '複製指令', 1200);
+}};
+
+if (img.complete) init(); else img.onload = init;
+window.addEventListener('resize', () => {{ scale = img.clientWidth / SRC_W; draw(); }});
+</script>
+"""
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("image", type=Path)
+    ap.add_argument("-o", "--out", type=Path, help="輸出的 html，省略就放暫存目錄")
+    args = ap.parse_args()
+
+    src = args.image.expanduser()
+    if not src.exists():
+        die(f"找不到圖片 {src}")
+    if not shutil.which("sips"):
+        die("找不到 sips，這支工具目前只支援 macOS")
+
+    sw, sh = source_size(src)
+
+    # 一律先轉成 jpeg，瀏覽器不見得吃 avif/heic
+    with tempfile.TemporaryDirectory() as td:
+        preview = Path(td) / "p.jpg"
+        subprocess.run(["sips", "-Z", "900", "-s", "format", "jpeg",
+                        "-s", "formatOptions", "80", str(src), "--out", str(preview)],
+                       capture_output=True)
+        if not preview.exists():
+            die("圖片轉檔失敗")
+        b64 = base64.b64encode(preview.read_bytes()).decode()
+
+    out = args.out or Path(tempfile.gettempdir()) / f"crop-{src.stem}.html"
+    out.write_text(HTML.format(name=src.name, fmt="jpeg", b64=b64,
+                               sw=sw, sh=sh, path=str(src)), encoding="utf-8")
+
+    print(f"✓ {out}")
+    print()
+    print("用瀏覽器打開它，拖出你要的範圍，複製下面的指令貼回終端機：")
+    print(f"  open \"{out}\"")
+
+
+if __name__ == "__main__":
+    main()

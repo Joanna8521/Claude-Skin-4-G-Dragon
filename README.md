@@ -1,17 +1,22 @@
 # Claude Skin
 
-開新對話時，你的照片和今天想對自己說的話會出現在最上面。
+**English** · [繁體中文](README.zh-TW.md)
 
-不用先打招呼，一開就有。
+Your own photo and a personal message, at the top of every new Claude Code conversation.
 
-> **English**: Shows your own photo and a personal daily message at the top of
-> every new Claude Code conversation, via the `SessionStart` hook. macOS only
-> (uses built-in `sips`). Zero dependencies.
-> **The CLI and docs are in Traditional Chinese.**
+You don't have to say hello first. Open a new conversation and it's there.
 
 ---
 
-## 安裝
+## Requirements
+
+- macOS (uses the built-in `sips` for image conversion)
+- Claude Code (desktop app or CLI)
+- Python 3.8+ (ships with macOS)
+
+No `pip install`, no `brew install`. Zero dependencies.
+
+## Install
 
 ```bash
 git clone https://github.com/Joanna8521/Claude-Skin-4-G-Dragon.git
@@ -19,153 +24,175 @@ cd Claude-Skin-4-G-Dragon
 ./install.sh
 ```
 
-零依賴，不用 `pip install` 也不用 `brew install`。
+This symlinks `claude-skin` into `~/.local/bin` and applies the default skin. If that directory isn't on your `PATH`, the installer tells you what to add to `~/.zshrc`.
 
-**repo 沒有附照片**，放你自己的：
+## Getting started
 
-```bash
-claude-skin photo ~/Downloads/你的圖.jpg
-```
+### 1. Add your photo
 
-開一個新對話就會看到。
-
-## 兩件事怎麼設定
-
-### 照片
+**This repo ships no photo.** Use your own:
 
 ```bash
-claude-skin photo <圖片路徑>
+claude-skin photo ~/Pictures/me.jpg
 ```
 
-換一次就換好，之後每個新對話都用這張。avif、heic、jpg、png 都吃（走 macOS 內建的 `sips`）。
+Accepts jpg, png, avif, heic, webp.
 
-全身照想只留臉：
+### 2. Crop it to the part that matters
+
+The greeting card shows a small square. A full-body shot shrinks the face to almost nothing, so crop it:
 
 ```bash
-claude-skin photo <圖> -c 400x400+240+129
+claude-skin crop ~/Pictures/me.jpg
 ```
 
-`-c` 是 `寬x高+左上角X+左上角Y`，單位是原圖像素。不加就用整張。
+This opens a web page with your photo and a draggable box. Drag to move, pull the pink dot to resize. The page prints the exact command underneath — copy it, paste it back into your terminal, done.
 
-### 打氣話
+If you'd rather type coordinates yourself:
 
 ```bash
-claude-skin say "今天只要把這件事做完就贏了"
+claude-skin photo ~/Pictures/me.jpg -c 400x400+240+129
 ```
 
-**想改就改，隨時。** 一天要改十次也可以，後面蓋掉前面。改完下一個新對話就生效。
+That's `width x height + leftX + topY`, in source-image pixels.
 
-設的話帶日期戳記，**只有當天有效**，隔天自動失效換回隨機招呼語。所以不是「每天一定要設」，是「設了就今天有效，不設就用預設的」。
+### 3. Set today's message
 
 ```bash
-claude-skin say            # 看今天設了什麼
-claude-skin say --clear    # 清掉，馬上改回隨機
+claude-skin say "Just ship it today"
 ```
 
-沒設的時候，會依當下時段從 `skins/gd-oppa/greetings.txt` 隨機挑一句：
+### 4. Open a new conversation
 
-| 時段 | 時間 |
+That's it. The photo and message appear at the top.
+
+## Daily use
+
+Two commands cover everything:
+
+```bash
+claude-skin say "whatever you need to hear today"
+claude-skin photo <image>
+```
+
+**Change the message whenever you want** — ten times a day is fine, each one replaces the last. It takes effect in your next new conversation.
+
+The message is date-stamped and **expires at midnight**. The next day it falls back to a random line from `greetings.txt`. So it's not a daily chore: set one when you want one, skip it and you get the default.
+
+```bash
+claude-skin say            # show today's message
+claude-skin say --clear    # drop it, back to random
+```
+
+### Random lines
+
+With nothing set, a line is picked at random from the pool matching the current time of day:
+
+| Tag | Hours |
 |---|---|
 | `morning` | 05:00 – 11:00 |
 | `afternoon` | 11:00 – 18:00 |
 | `night` | 18:00 – 23:00 |
 | `latenight` | 23:00 – 05:00 |
-| `any` | 任何時候 |
+| `any` | always eligible |
 
-想要**長期**的句子而不是只有今天，直接編 `greetings.txt`，格式 `時段|句子`，`#` 開頭是註解。存檔立刻生效，不用重新 apply。
+Edit `skins/<name>/greetings.txt` to change them. Format is `tag|text`, `#` starts a comment. Saves take effect immediately — no re-apply needed.
 
-### 小標題
+Use this for lines you want **permanently**, as opposed to `say` which is just for today.
 
-照片旁邊那行小字（例如「今天想對親愛的妳說的話」）寫在 `skins/<name>/skin.json`：
+### The small label
+
+The caption above the message lives in `skins/<name>/skin.json`:
 
 ```json
 {
-  "custom_label": "今天想對親愛的妳說的話",
-  "random_label": "歐巴今天想說"
+  "custom_label": "Today's note to yourself",
+  "random_label": "Today's nudge"
 }
 ```
 
-`custom_label` 用在你自己 `say` 的句子，`random_label` 用在隨機抽的。
+`custom_label` is used for messages you set with `say`; `random_label` for the random ones.
 
-## 要不要自動幫你開口
+## Auto-greeting
 
-問候是 Claude 「回覆」出來的，所以正常情況要你先講一句話它才會回。
+The greeting is rendered by Claude's reply, so normally you'd have to send a message before it appears.
 
-預設會用 `initialUserMessage` 幫你代打一句「嗨」，這樣一開新對話就直接看到問候。代價是畫面上會多一個你沒打過的訊息泡泡，而且每次開場都用掉一次模型回合。
+By default the hook uses `initialUserMessage` to send a short "hi" for you, so the greeting shows up the moment you open a conversation. The cost: a message bubble you didn't type, and one model turn per session.
 
-不想要的話，在 `skin.json` 加：
+Turn it off in `skin.json`:
 
 ```json
 { "auto_greet": false }
 ```
 
-改代打的內容：
+Or change what it says:
 
 ```json
-{ "auto_greet_text": "早安" }
+{ "auto_greet_text": "morning" }
 ```
 
-## 指令
+## Commands
 
 ```bash
-claude-skin list              # 列出所有 skin
-claude-skin apply <name>      # 套用
-claude-skin preview <name>    # 看會送給 Claude 的開場指示
-claude-skin current           # 看目前套哪個
-claude-skin restore           # 還原成套用前的樣子
+claude-skin list              # available skins
+claude-skin apply <name>      # apply one
+claude-skin preview <name>    # see what gets sent to Claude
+claude-skin current           # which one is active
+claude-skin restore           # undo everything
 
-claude-skin say <文字>        # 今天想說的話
-claude-skin photo <圖> [-c]   # 換照片
+claude-skin say <text>        # today's message
+claude-skin crop <image>      # visual crop picker
+claude-skin photo <image>     # set the photo
 ```
 
-`apply` 和 `restore` 要開新對話或 `/clear` 才生效。`say`、`photo`、改 `greetings.txt` 都是即時的。
+`apply` and `restore` need a new conversation or `/clear`. `say`, `photo`, and edits to `greetings.txt` are immediate.
 
-## 一個 skin 有什麼
+## Making your own skin
 
 ```
 skins/<name>/
-├── skin.json        # 名稱、小標題、auto_greet 設定
-├── greetings.txt    # 招呼語庫
-├── photo.jpg        # 你的照片（gitignore，本機才有）
-├── today.txt        # 今天的話（gitignore）
-└── persona.md       # 人格（可選）
+├── skin.json        # name, labels, auto_greet settings
+├── greetings.txt    # random line pool
+├── photo.jpg        # your photo (gitignored)
+├── today.txt        # today's message (gitignored)
+└── persona.md       # optional personality
 ```
 
-複製一份改名就是新 skin，`skin.json` 的 `name` 要和資料夾同名。
+Copy a skin directory, rename it, and make `name` in `skin.json` match the folder name.
 
-## 可選：連語氣一起換
+## Optional: change Claude's tone too
 
 ```bash
 claude-skin apply <name> --with-persona
 ```
 
-會把 `persona.md` 裝成 Claude Code 的 output style。**預設不加**，不加就完全不碰 `outputStyle`。
+Installs `persona.md` as a Claude Code output style. **Off by default** — without the flag, `outputStyle` is never touched.
 
-`persona.md` 裡寫死一條線：測試掛了就說掛了、沒做完就說沒做完、不確定就說不確定。壞消息可以用可愛的語氣講，但不准為了哄人而修飾內容。
+`persona.md` holds one hard rule: if tests fail, say they failed; if something isn't done, say so; if you're unsure, say you're unsure. Bad news can be delivered warmly, but never softened into inaccuracy.
 
-一個會說「差不多好了呦～」但其實測試全紅的 AI，比沒有人格的 AI 危險得多。要自己寫人格檔請保留這段。
+An AI that says "almost there!" while the tests are all red is more dangerous than one with no personality at all. Keep that section if you write your own.
 
-## 桌面 app 的三個發現
+## Three things about the desktop app
 
-做這個東西的過程中實測出三件文件沒寫、或跟文件不一致的事。留在這裡給後來的人省時間。
+Findings from building this that the docs don't mention, or contradict. Saved here so the next person doesn't lose the same hours.
 
-### 1. hook 的 stdout 不會顯示給使用者
+### 1. Hook stdout is not shown to the user
 
-官方文件說 SessionStart 的 stdout「is shown to the user and injected into Claude's context」。
+The docs say SessionStart stdout "is shown to the user and injected into Claude's context."
 
-**在桌面 app，只有後半句成立。** stdout 在 transcript 裡被記成 `type: "attachment"`，只餵給模型，不畫在螢幕上。所以 hook 印再漂亮的 ASCII art，使用者也看不到，只有 Claude「看得到」。
+**In the desktop app, only the second half is true.** stdout is recorded in the transcript as `type: "attachment"` — fed to the model, never painted on screen. However pretty your ASCII art is, only Claude "sees" it.
 
-### 2. `systemMessage` 也不顯示
+### 2. `systemMessage` isn't shown either
 
-文件說 `systemMessage` 是「warning message shown to the user」。實測在桌面 app 的新對話裡，同樣沒有出現在畫面上。
+The docs describe `systemMessage` as a "warning message shown to the user." Tested in a fresh desktop-app conversation: it doesn't appear on screen.
 
-**結論：唯一確定會渲染給使用者看的，是 Claude 自己的回覆。** 所以本專案的 hook 不印畫面，改用 `additionalContext` 請 Claude 代印。這也剛好比較好看，因為 Claude 的回覆能顯示真正的圖片，不是終端機色塊。
+**So the only channel that reliably renders for the user is Claude's own reply.** That's why this hook prints nothing and asks Claude to do the printing instead. It turned out better anyway — a reply can show a real image, not terminal color blocks.
 
-### 3. 滿版底圖這條路被官方擋死
+### 3. Full-window backgrounds are blocked by design
 
-[Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 用本機 CDP 連進 Codex 桌面 app 注入 CSS，把整個視窗換成一張圖。這在 Claude 上做不到。
+[Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) attaches to the Codex desktop app over local CDP and injects CSS to replace the whole window with an image. That is not possible on Claude.
 
-Claude.app（Electron 42.7.0）的 main process 有一段啟動參數守衛：
+Claude.app (Electron 42.7.0) guards its launch arguments in the main process:
 
 ```js
 A.some(g => {
@@ -174,41 +201,41 @@ A.some(g => {
 })
 ```
 
-實測用 `--remote-debugging-port=9223` 啟動（獨立 `--user-data-dir`），程序立刻結束、exit 0、無視窗、port 無監聽。
+Launching with `--remote-debugging-port=9223` (isolated `--user-data-dir`) exits immediately: exit 0, no window, nothing listening on the port.
 
-這是刻意的安全控制：CDP 一開，任何本機程序都能讀你的 session token、對話內容、MCP 憑證。Codex 沒擋所以 Dream Skin 能用，Claude 擋了。
+This is deliberate. An open CDP port lets any local process read your session token, conversation contents, and MCP credentials. Codex doesn't block it, which is what makes Dream Skin possible; Claude does.
 
-繞過去只能改 `app.asar` 或重簽 binary，會破壞 code signature、每次更新被覆蓋、還把帳號憑證暴露給整台機器。**本專案不做這件事。**
+The only way around it is patching `app.asar` or re-signing the binary — which breaks the code signature, gets overwritten on every update, and exposes your credentials to the whole machine. **This project doesn't do that.**
 
-## 適用範圍
+## Scope
 
-| 目標 | 支援 |
+| Target | Supported |
 |---|---|
-| 桌面 app 的 Code 分頁 | ✅ |
-| 終端機的 `claude` CLI | ✅ 文字會出現，圖片看終端機支不支援 |
-| 桌面 app 的首頁（Welcome back 那頁） | ❌ 那是 app 自己的畫面 |
-| 桌面 app 的 Chat 分頁 | ❌ 沒有 hook 系統 |
-| 視窗底圖／自訂 CSS | ❌ 見上一節 |
+| Desktop app, Code tab | ✅ |
+| Terminal `claude` CLI | ✅ text yes, images depend on your terminal |
+| Desktop app home screen ("Welcome back") | ❌ that's the app's own UI |
+| Desktop app, Chat tab | ❌ no hook system |
+| Window background / custom CSS | ❌ see above |
 
-問候出現的位置是**對話的最上面**，不是 app 首頁。
+The greeting appears at the **top of the conversation**, not on the app's home screen.
 
-## 動到哪些檔案
+## Files touched
 
 ```
-~/.claude/settings.json                     加 hooks.SessionStart
-~/.claude/settings.json.pre-skin-<時間戳>    首次套用前的完整備份
-~/.claude/output-styles/<skin>.md           只有 --with-persona 才會裝
-~/.claude/claude-skin-state.json            記錄原狀，restore 用
+~/.claude/settings.json                     adds hooks.SessionStart
+~/.claude/settings.json.pre-skin-<stamp>    full backup before first apply
+~/.claude/output-styles/<skin>.md           only with --with-persona
+~/.claude/claude-skin-state.json            records prior state for restore
 ```
 
-`restore` 只移除本工具加的東西，不動你原本的設定，備份檔也會留著。
+`restore` removes only what this tool added. Your own settings are left alone and the backup is kept.
 
-## 說明
+## Note
 
-本專案**不含任何藝人照片**。`photo.jpg` 是使用者自己放的，已列入 `.gitignore`。
+This repo **contains no celebrity photos**. `photo.jpg` is whatever you put there, and it's gitignored.
 
-這是粉絲向的個人化工具，與權志龍本人及其經紀公司無關，不代表任何人發言，也不是官方或本人背書的產品。放什麼照片是你自己的事，請自行確認你有使用該圖的權利。
+This is a fan-made personalization tool. It is not affiliated with, endorsed by, or speaking for G-Dragon or his agency. Whatever image you use is your own responsibility — make sure you have the right to use it.
 
-## 授權
+## License
 
 MIT

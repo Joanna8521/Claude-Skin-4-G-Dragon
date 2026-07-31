@@ -12,6 +12,7 @@
 
   claude-skin say <文字>        設定今天想說的話（隨時可改，只當天有效）
   claude-skin say --clear       清掉，改回隨機招呼語
+  claude-skin crop <圖>         開一個網頁用拖的決定裁切範圍，產生下面那行指令
   claude-skin photo <圖> [-c WxH+X+Y]
                                 換掉開場照片，-c 可先裁切
 
@@ -354,6 +355,11 @@ def main() -> None:
         cmd_apply(names[0], with_persona)
     elif cmd == "say":
         cmd_say(rest)
+    elif cmd == "crop":
+        if not rest:
+            die("crop 要給圖片路徑")
+        r = subprocess.run([sys.executable, str(REPO / "bin" / "crop-guide")] + rest)
+        sys.exit(r.returncode)
     elif cmd == "photo":
         ap = argparse.ArgumentParser(prog="claude-skin photo")
         ap.add_argument("image")
